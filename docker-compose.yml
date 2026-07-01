@@ -1,0 +1,22 @@
+name: payment-gateway-pipeline
+
+services:
+  vault:
+    image: hashicorp/vault:1.17.6
+    container_name: vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "poc-dev-root-token"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  default:
+    name: payment-gateway-net
