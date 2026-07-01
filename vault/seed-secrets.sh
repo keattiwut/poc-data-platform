@@ -13,6 +13,9 @@ put_secret() {
   if [ "$http_code" = "200" ]; then
     echo "secret/${path} already exists, skipping (idempotent)"
     return 0
+  elif [ "$http_code" != "404" ]; then
+    echo "ERROR: unexpected response checking secret/${path} (HTTP ${http_code}) — refusing to write, could indicate an auth or connectivity problem" >&2
+    exit 1
   fi
   curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
     -H "Content-Type: application/json" \
