@@ -129,7 +129,10 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
-      - "8123:8123"
+      # Host-side 8123 collides with a pre-existing socksproxy.exe Windows
+      # service bound to 127.0.0.1:8123 on this dev machine; remapped to
+      # 8124 on the host. Container-internal port is unaffected (still 8123).
+      - "8124:8123"
       - "9002:9000"
     volumes:
       - clickhouse-data:/var/lib/clickhouse

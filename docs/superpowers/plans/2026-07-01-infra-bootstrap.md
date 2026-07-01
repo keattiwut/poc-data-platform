@@ -959,7 +959,7 @@ payment_gateway:
       type: clickhouse
       schema: default
       host: localhost
-      port: 8123
+      port: 8124
       user: "{{ env_var('CLICKHOUSE_USER') }}"
       password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
       secure: false

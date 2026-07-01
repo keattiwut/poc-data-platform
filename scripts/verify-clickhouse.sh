@@ -11,7 +11,10 @@ source .env
 set +a
 
 echo "Checking ClickHouse HTTP interface..."
-RESULT=$(curl -sf "http://pipeline_ch_admin:${CLICKHOUSE_PASSWORD}@localhost:8123/?query=SELECT%201")
+# Host-side port is 8124, not ClickHouse's default 8123: on this dev machine,
+# 8123 is taken by a pre-existing socksproxy.exe Windows service. See
+# docker-compose.yml's clickhouse service ports mapping.
+RESULT=$(curl -sf "http://pipeline_ch_admin:${CLICKHOUSE_PASSWORD}@localhost:8124/?query=SELECT%201")
 if [ "$RESULT" != "1" ]; then
   echo "FAIL: expected '1', got '${RESULT}'"
   exit 1
