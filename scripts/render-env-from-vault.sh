@@ -23,6 +23,8 @@ get_field() {
   echo "AIRFLOW_FERNET_KEY=$(get_field airflow fernet_key)"
   echo "AIRFLOW_ADMIN_USER=$(get_field airflow admin_user)"
   echo "AIRFLOW_ADMIN_PASSWORD=$(get_field airflow admin_password)"
+  echo "CLICKHOUSE_USER=$(get_field clickhouse user)"
+  echo "CLICKHOUSE_PASSWORD=$(get_field clickhouse password)"
 } > .env
 
 echo "Rendered .env from Vault secrets."
