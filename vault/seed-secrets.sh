@@ -25,4 +25,7 @@ put_secret "postgres" \
 put_secret "minio" \
   "\"root_user\": \"pipeline_minio_admin\", \"root_password\": \"$(random_password)\""
 
+put_secret "airflow" \
+  "\"fernet_key\": \"$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())' 2>/dev/null || openssl rand -base64 32)\", \"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
+
 echo "Vault secret seeding complete."

@@ -20,6 +20,9 @@ get_field() {
   echo "POSTGRES_DB=$(get_field postgres db)"
   echo "MINIO_ROOT_USER=$(get_field minio root_user)"
   echo "MINIO_ROOT_PASSWORD=$(get_field minio root_password)"
+  echo "AIRFLOW_FERNET_KEY=$(get_field airflow fernet_key)"
+  echo "AIRFLOW_ADMIN_USER=$(get_field airflow admin_user)"
+  echo "AIRFLOW_ADMIN_PASSWORD=$(get_field airflow admin_password)"
 } > .env
 
 echo "Rendered .env from Vault secrets."
