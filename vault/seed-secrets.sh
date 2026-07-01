@@ -7,6 +7,13 @@ VAULT_TOKEN="poc-dev-root-token"
 put_secret() {
   local path="$1"
   shift
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Vault-Token: ${VAULT_TOKEN}" \
+    "${VAULT_ADDR}/v1/secret/data/${path}")
+  if [ "$http_code" = "200" ]; then
+    echo "secret/${path} already exists, skipping (idempotent)"
+    return 0
+  fi
   curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
     -H "Content-Type: application/json" \
     -X POST \
