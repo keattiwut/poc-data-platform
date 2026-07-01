@@ -18,6 +18,8 @@ get_field() {
   echo "POSTGRES_HOST=$(get_field postgres host)"
   echo "POSTGRES_PORT=$(get_field postgres port)"
   echo "POSTGRES_DB=$(get_field postgres db)"
+  echo "MINIO_ROOT_USER=$(get_field minio root_user)"
+  echo "MINIO_ROOT_PASSWORD=$(get_field minio root_password)"
 } > .env
 
 echo "Rendered .env from Vault secrets."

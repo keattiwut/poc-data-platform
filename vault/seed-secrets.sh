@@ -22,4 +22,7 @@ random_password() {
 put_secret "postgres" \
   "\"user\": \"pipeline_admin\", \"password\": \"$(random_password)\", \"host\": \"postgres\", \"port\": \"5432\", \"db\": \"pipeline\""
 
+put_secret "minio" \
+  "\"root_user\": \"pipeline_minio_admin\", \"root_password\": \"$(random_password)\""
+
 echo "Vault secret seeding complete."
