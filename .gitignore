@@ -1,0 +1,12 @@
+.superpowers/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+node_modules/
+target/
+dbt_packages/
+logs/
+*.log
+.DS_Store

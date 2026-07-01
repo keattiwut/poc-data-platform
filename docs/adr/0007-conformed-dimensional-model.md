@@ -1,0 +1,3 @@
+# Conformed dimensional model for marts
+
+Data marts are built as a shared dimensional model (star schema) in dbt — one set of conformed fact and dimension tables (e.g. a single `dim_customer`, `fact_orders`) reused across every Superset dashboard — rather than one bespoke, denormalized mart per dashboard. This costs more upfront dbt modeling work to design shared dimensions correctly, but was chosen deliberately to avoid duplicated business logic (e.g. the definition of "active customer") drifting between dashboards as more get built. Revisit only if a specific dashboard's needs genuinely can't fit the conformed model.

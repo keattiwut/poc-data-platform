@@ -1,0 +1,3 @@
+# Parquet + medallion zones for the data lake, no lakehouse table format
+
+The lake is organized as raw/bronze → cleaned/silver → curated/gold zones of partitioned Parquet files on MinIO, without a lakehouse table format engine (Apache Iceberg, Delta Lake, or Hudi) or an accompanying catalog. Parquet is already the industry-standard columnar format and medallion zoning is a well-understood pattern, so this gets us "open source, industrial standard" without the catalog/compaction operational burden that Iceberg/Delta/Hudi would add. Deliberately deferred: if we later need ACID transactions, schema evolution, or time travel directly on the lake, adopting Iceberg (the more multi-engine-neutral of the lakehouse formats) is the natural upgrade path.

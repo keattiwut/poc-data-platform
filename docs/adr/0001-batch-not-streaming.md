@@ -1,0 +1,3 @@
+# Batch pipeline, not streaming
+
+Even though one source is a message queue, BI dashboards don't require sub-hour freshness, so we're building a scheduled batch (daily) pipeline rather than a streaming architecture. The message queue is treated as just another periodically-drained source — messages are pulled and written to the lake on the same schedule as the DB/Excel/CSV sources, not consumed continuously. This avoids the significant added complexity of stream processing (e.g. Kafka + a stream consumer/CDC tool) that a real-time requirement would demand. Revisit if a future use case needs near-real-time data.

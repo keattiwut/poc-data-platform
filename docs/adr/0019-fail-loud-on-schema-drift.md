@@ -1,0 +1,3 @@
+# Fail loudly on source schema drift, don't auto-propagate
+
+When a Bank or Partner source changes its schema unexpectedly (new column, renamed field, changed type), the affected Airbyte sync or dbt model is configured to fail rather than silently auto-adapt — routed to the critical alert channel (ADR-0008) for manual review. This overrides Airbyte's default schema-drift auto-propagation behavior deliberately: for a payment-adjacent system feeding a company performance dashboard, silently absorbing an unreviewed schema change (especially a renamed or retyped field) risks corrupting revenue/volume numbers without anyone noticing. The cost is more manual intervention for genuinely harmless additive changes; that's accepted as the safer default.

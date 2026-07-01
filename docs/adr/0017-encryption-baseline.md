@@ -1,0 +1,3 @@
+# Encryption at rest and in transit, even for the POC
+
+MinIO uses server-side encryption for lake data, ClickHouse's data volumes are encrypted at the disk/OS level, and TLS is used between every internal service (Airflow, Airbyte, dbt, ClickHouse, Vault) — not just on the publicly exposed Superset endpoint (ADR-0016). This was chosen deliberately over deferring encryption until a later "production hardening" pass, even though it's explicitly a POC: transaction amounts, patterns, and business performance data are sensitive on their own even without raw PAN data (ADR-0015), and building the encryption baseline in from the start is materially cheaper than retrofitting it onto every service's config later.

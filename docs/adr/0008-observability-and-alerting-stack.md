@@ -1,0 +1,7 @@
+# Observability and alerting stack
+
+System monitoring uses Prometheus + Grafana (Airflow, ClickHouse, and MinIO all expose native Prometheus metrics) — a deliberately separate concern from Superset, which stays scoped to business BI. Logs are centralized via Grafana Loki (the "PLG stack"), giving one pane of glass for metrics and logs correlated by time, chosen over a heavier ELK/OpenSearch stack for lower operational overhead.
+
+Data monitoring deliberately does *not* use a dedicated data-observability tool (e.g. Elementary) — freshness and correctness are covered by dbt's built-in `source freshness` checks plus Airflow task success/failure, since dbt tests already catch quality failures at the model level. Revisit if row-count/volume anomaly detection (a job succeeds but silently loads far less data than normal) becomes a real recurring problem this can't catch.
+
+Alerts route to Microsoft Teams via two channels by severity: **critical** (extraction task failed, dbt build failed entirely, a warehouse/service is unreachable, or a dbt error-severity test failed — see `CONTEXT.md` for the exact definition) and **warning** (everything else worth knowing but non-blocking). There's no formal on-call rotation or paging tool (PagerDuty/Opsgenie/Grafana OnCall) — alerts are monitored during business hours via the Teams channels. Because there's no dedicated on-call training to fall back on, lightweight runbooks (one per common failure mode, linked from the alert message) are written to keep incident response from depending on tribal knowledge.

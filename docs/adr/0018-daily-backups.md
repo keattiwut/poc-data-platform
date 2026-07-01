@@ -1,0 +1,3 @@
+# Daily automated backups, ~24h RPO
+
+MinIO data, ClickHouse (via its native backup tooling), the Airflow metadata Postgres DB, and Vault's storage backend are all backed up daily to a location separate from the self-hosted server itself — not just an on-box snapshot. Accepting up to ~24h of data loss is reasonable at POC scale, since most source data can be regenerated (the mock generator's backfill, ADR-0010) or re-extracted (Airbyte re-sync from source), but relying on zero backups given the self-hosted infra choice (ADR-0002) with no managed cloud safety net would be an unforced risk the moment any state exists that isn't reproducible from code — Vault secrets and Superset dashboard definitions in particular.

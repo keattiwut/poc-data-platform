@@ -1,0 +1,3 @@
+# Self-hosted, on-prem OSS infrastructure
+
+The pipeline runs on our own servers via Docker Compose rather than cloud VMs or managed Kubernetes/orchestration services (e.g. no AWS MWAA, no Cloud Composer). The data lake uses MinIO, an open-source S3-API-compatible object store, instead of a cloud provider's object storage. This keeps the whole stack open-source with no vendor lock-in, fits the "modernize the legacy crontab box" framing of this project, and avoids cloud spend for a POC. Trade-off: we take on the ops burden of running and scaling this ourselves — revisit if data volume or availability requirements outgrow a single-host Docker Compose setup (natural next step would be Kubernetes on the same self-hosted footprint, or a cloud VM group).

@@ -1,0 +1,3 @@
+# Current-state-only warehouse, no Type 2 SCD history
+
+Even though CDC captures every row-level change from the database source, dbt applies those changes as upserts (merge/incremental strategy) so marts always reflect the latest value per record — no valid-from/valid-to history is retained. This is the simpler and cheaper option, and matches typical "what does it look like now" BI dashboard needs. It was deliberately chosen over Type 2 SCD (full history with point-in-time queries), which would need dbt snapshot models and meaningfully more modeling work. Revisit if a real reporting requirement emerges for point-in-time/"as of date X" answers.

@@ -1,0 +1,3 @@
+# HashiCorp Vault for secrets management
+
+Credentials for the database sources, SFTP, Kafka, ClickHouse, and MinIO are managed centrally in HashiCorp Vault rather than Airflow's built-in Connections/Variables store. This was chosen deliberately over the simpler Airflow-native option (which would have avoided standing up an extra service) because Vault gives proper audit logging, access policies, and a rotation story across every component (Airflow, Airbyte, dbt) instead of secrets being scattered across each tool's own config, or held only in Airflow's metadata DB. Airflow, Airbyte, and dbt all read credentials from Vault rather than storing their own copies.
