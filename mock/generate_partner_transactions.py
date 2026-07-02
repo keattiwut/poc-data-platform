@@ -80,6 +80,12 @@ def build_transaction() -> dict:
 
 
 def main() -> None:
+    # .env's POSTGRES_HOST is "postgres" (the Docker Compose service name),
+    # correct for container-to-container traffic (e.g. Airflow's connection
+    # string) but unreachable from the host. Running this script directly on
+    # the host: override at invocation time, e.g. `POSTGRES_HOST=localhost
+    # python3 mock/generate_partner_transactions.py` - postgres:5432 is
+    # published to the host at localhost:5432 (docker-compose.yml).
     conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
         port=os.environ["POSTGRES_PORT"],
