@@ -41,4 +41,7 @@ put_secret "airflow" \
 put_secret "clickhouse" \
   "\"user\": \"pipeline_ch_admin\", \"password\": \"$(random_password)\""
 
+put_secret "superset" \
+  "\"secret_key\": \"$(openssl rand -base64 42)\", \"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
+
 echo "Vault secret seeding complete."

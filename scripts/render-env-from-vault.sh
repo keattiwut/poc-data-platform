@@ -25,6 +25,9 @@ get_field() {
   echo "AIRFLOW_ADMIN_PASSWORD=$(get_field airflow admin_password)"
   echo "CLICKHOUSE_USER=$(get_field clickhouse user)"
   echo "CLICKHOUSE_PASSWORD=$(get_field clickhouse password)"
+  echo "SUPERSET_SECRET_KEY=$(get_field superset secret_key)"
+  echo "SUPERSET_ADMIN_USER=$(get_field superset admin_user)"
+  echo "SUPERSET_ADMIN_PASSWORD=$(get_field superset admin_password)"
 } > .env
 
 echo "Rendered .env from Vault secrets."

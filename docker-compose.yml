@@ -146,6 +146,61 @@ services:
       timeout: 5s
       retries: 10
 
+  superset-init:
+    build:
+      context: ./superset
+    image: pipeline-superset:4.1.1
+    container_name: superset-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: superset
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
+    entrypoint: >
+      /bin/bash -c "
+      superset db upgrade &&
+      superset fab create-admin --username $$SUPERSET_ADMIN_USER --password $$SUPERSET_ADMIN_PASSWORD --firstname Admin --lastname User --email admin@example.com &&
+      superset init
+      "
+
+  superset:
+    build:
+      context: ./superset
+    image: pipeline-superset:4.1.1
+    container_name: superset
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: superset
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
+    ports:
+      - "8088:8088"
+    command: >
+      /bin/sh -c "gunicorn --bind 0.0.0.0:8088 --workers 2 'superset.app:create_app()'"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8088/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
 volumes:
   postgres-data:
   minio-data:
