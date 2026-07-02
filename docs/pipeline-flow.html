@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How the Payment Gateway Data Pipeline POC Works</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --bg-alt: #101a2e;
+    --panel: #141f38;
+    --panel-border: #223255;
+    --text: #e6ecf5;
+    --muted: #93a3c2;
+    --muted-2: #6b7ba3;
+    --implemented: #34d399;
+    --implemented-bg: rgba(52, 211, 153, 0.12);
+    --planned: #fbbf24;
+    --planned-bg: rgba(251, 191, 36, 0.10);
+    --partner: #f59e0b;
+    --bank: #38bdf8;
+    --merged: #a78bfa;
+    --accent: #7dd3fc;
+    --radius: 10px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(56, 189, 248, 0.08), transparent 45%),
+      radial-gradient(circle at 85% 20%, rgba(167, 139, 250, 0.06), transparent 40%);
+  }
+
+  main {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  header.page-header {
+    padding: 56px 24px 28px;
+    max-width: 1240px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  header.page-header h1 {
+    font-size: clamp(1.6rem, 3vw, 2.3rem);
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+
+  header.page-header p.subtitle {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  section {
+    margin: 48px 0;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    margin: 0 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h2 .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    font-size: 0.85rem;
+    color: var(--accent);
+    flex: none;
+  }
+
+  /* ---------- Intro ---------- */
+  .intro-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  @media (max-width: 800px) {
+    .intro-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 1.02rem;
+    color: var(--accent);
+  }
+
+  .card p {
+    margin: 0;
+    color: #cbd5f0;
+    font-size: 0.95rem;
+  }
+
+  .card p + p { margin-top: 10px; }
+
+  /* ---------- Legend ---------- */
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex: none;
+  }
+
+  .legend-swatch.implemented { background: var(--implemented); }
+  .legend-swatch.planned {
+    background: transparent;
+    border: 2px dashed var(--planned);
+  }
+  .legend-swatch.mixed {
+    background: linear-gradient(135deg, var(--implemented) 0 50%, transparent 50% 100%);
+    border: 2px dashed var(--planned);
+  }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .legend-dot.partner { background: var(--partner); }
+  .legend-dot.bank { background: var(--bank); }
+  .legend-dot.merged { background: var(--merged); }
+
+  /* ---------- Flow controls ---------- */
+  .flow-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 22px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+  }
+
+  .flow-controls button {
+    background: var(--bg-alt);
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .flow-controls button:hover { background: #1a2947; border-color: var(--accent); }
+  .flow-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .flow-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .flow-controls .spacer { flex: 1; }
+
+  .stage-counter {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .progress-track {
+    flex-basis: 100%;
+    height: 4px;
+    background: var(--bg-alt);
+    border-radius: 4px;
+    overflow: hidden;
+    order: 5;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--bank), var(--merged));
+    width: 5%;
+    transition: width 0.5s ease;
+  }
+
+  /* ---------- Pipeline visualization ---------- */
+  .pipeline-scroll {
+    overflow-x: auto;
+    padding-bottom: 8px;
+    border-radius: var(--radius);
+  }
+
+  .pipeline {
+    position: relative;
+    width: 1360px;
+    height: 210px;
+    padding-top: 34px;
+  }
+
+  .lane-legend {
+    position: absolute;
+    top: -34px;
+    left: 0;
+    display: flex;
+    gap: 18px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .lane-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  .track-line {
+    position: absolute;
+    top: 50%;
+    left: 2%;
+    right: 2%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(148,163,184,0.15), rgba(148,163,184,0.35), rgba(148,163,184,0.15));
+    transform: translateY(-1px);
+  }
+
+  .dot {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: left 0.7s cubic-bezier(.4,0,.2,1), top 0.7s cubic-bezier(.4,0,.2,1), opacity 0.4s ease, background 0.4s ease;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.25), 0 0 14px currentColor;
+    opacity: 0;
+    z-index: 5;
+  }
+
+  .dot-partner { background: var(--partner); color: var(--partner); }
+  .dot-bank { background: var(--bank); color: var(--bank); }
+  .dot-merged { background: var(--merged); color: var(--merged); }
+
+  .dot.visible { opacity: 1; }
+
+  .stage-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    height: 100%;
+    align-items: center;
+    z-index: 3;
+  }
+
+  .stage-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 6px;
+    cursor: pointer;
+    outline: none;
+    background: transparent;
+    border: none;
+  }
+
+  .stage-col:focus-visible .stage-node { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .stage-node {
+    width: 100%;
+    min-height: 84px;
+    border-radius: 9px;
+    padding: 9px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+    background: var(--panel);
+    border: 1.5px solid var(--panel-border);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .stage-col.mini-wrap { gap: 8px; }
+  .stage-node.mini { min-height: 44px; padding: 6px 6px; font-size: 0.72rem; }
+
+  .stage-node .badge {
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .status-implemented .stage-node, .stage-node.status-implemented {
+    border-style: solid;
+    border-color: rgba(52, 211, 153, 0.55);
+  }
+  .status-implemented .badge { background: var(--implemented-bg); color: var(--implemented); }
+
+  .status-planned .stage-node, .stage-node.status-planned {
+    border-style: dashed;
+    border-color: rgba(251, 191, 36, 0.55);
+    opacity: 0.82;
+  }
+  .status-planned .badge { background: var(--planned-bg); color: var(--planned); }
+
+  .status-mixed .stage-node, .stage-node.status-mixed {
+    border-style: solid;
+    border-image: linear-gradient(135deg, rgba(52,211,153,0.7), rgba(251,191,36,0.7)) 1;
+    opacity: 0.92;
+  }
+  .status-mixed .badge { background: linear-gradient(90deg, var(--implemented-bg), var(--planned-bg)); color: #d9e2f7; }
+
+  .stage-title { font-size: 0.78rem; font-weight: 600; }
+  .stage-sub { font-size: 0.65rem; color: var(--muted-2); }
+
+  .stage-col.active .stage-node {
+    transform: translateY(-4px) scale(1.04);
+    box-shadow: 0 0 0 2px var(--accent), 0 8px 22px rgba(125, 211, 252, 0.25);
+  }
+
+  .stage-col.done .stage-node { opacity: 0.55; }
+
+  .stage-node.merge-pulse {
+    animation: pulseRing 0.7s ease-out;
+  }
+
+  @keyframes pulseRing {
+    0% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.7); }
+    100% { box-shadow: 0 0 0 16px rgba(167, 139, 250, 0); }
+  }
+
+  .arrow-hint {
+    position: absolute;
+    bottom: -4px;
+    font-size: 0.6rem;
+    color: var(--muted-2);
+  }
+
+  /* ---------- Detail panel ---------- */
+  .detail-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-top: 22px;
+    transition: opacity 0.18s ease;
+  }
+
+  .detail-panel.fade { opacity: 0; }
+
+  .detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .detail-head h3 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .status-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .status-pill.implemented { background: var(--implemented-bg); color: var(--implemented); border: 1px solid rgba(52,211,153,0.4); }
+  .status-pill.planned { background: var(--planned-bg); color: var(--planned); border: 1px solid rgba(251,191,36,0.4); }
+
+  .detail-panel p.desc {
+    color: #cfd9f2;
+    font-size: 0.95rem;
+    margin: 0 0 14px;
+  }
+
+  .vocab-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .vocab-chip {
+    font-size: 0.75rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--accent);
+    cursor: help;
+  }
+
+  /* ---------- Orchestration note ---------- */
+  .cross-cutting {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  @media (max-width: 800px) {
+    .cross-cutting { grid-template-columns: 1fr; }
+  }
+
+  .cc-card {
+    background: var(--bg-alt);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+
+  .cc-card h4 {
+    margin: 0 0 6px;
+    font-size: 0.92rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cc-card p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+
+  /* ---------- Phasing table ---------- */
+  table.phasing {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  table.phasing thead th {
+    text-align: left;
+    background: var(--bg-alt);
+    color: var(--muted);
+    font-weight: 600;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  table.phasing td {
+    padding: 10px 14px;
+    border-top: 1px solid var(--panel-border);
+    color: #d5deef;
+    vertical-align: top;
+  }
+
+  table.phasing tr.current-row td { background: rgba(52, 211, 153, 0.06); }
+
+  td.issue-num { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    color: var(--muted-2);
+    font-size: 0.82rem;
+    text-align: center;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  footer a { color: var(--accent); }
+
+  code { font-family: var(--mono); background: var(--bg-alt); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>How the Payment Gateway Data Pipeline POC Works</h1>
+  <p class="subtitle">
+    An animated walkthrough of the end-to-end Transaction data flow — from Bank &amp; Partner
+    sources, through extraction and the data lake, into the warehouse, and out to the dashboard.
+    Every stage is labeled with what's actually built today versus what's still planned.
+  </p>
+</header>
+
+<main>
+
+  <!-- ============ INTRO ============ -->
+  <section id="intro">
+    <h2><span class="step-num">1</span> The Concept</h2>
+    <div class="intro-grid">
+      <div class="card">
+        <h3>The Problem</h3>
+        <p>
+          The Payment Gateway currently relies on a legacy crontab-based pipeline for performance
+          reporting. Transaction data arrives from Banks (the financial institutions that authorize
+          and settle funds) and Partners (the merchants, aggregators, and PSPs that originate
+          transactions) through four disconnected channels: direct database, Excel drops, CSV
+          drops, and message queues.
+        </p>
+        <p>
+          There's no reliable way to reconcile these sources. If a Bank reports 10,000 transactions
+          and a Partner reports 9,950 for the same day, nobody can say — automatically — whether
+          that's a real discrepancy, a delayed arrival, or a duplicate-removal artifact. Nobody can
+          confidently cite volume, Authorization Rate, Settlement Rate, or revenue without manual
+          cross-checking. It doesn't scale.
+        </p>
+      </div>
+      <div class="card">
+        <h3>The Solution</h3>
+        <p>
+          This POC replaces the legacy pipeline with a modernized, fully open-source platform:
+          Airbyte extracts data from all four source types, Airflow orchestrates the daily batch
+          run, a MinIO data lake stores bronze (raw) and silver (cleaned) Parquet zones, dbt
+          reconciles Bank-side and Partner-side records on a shared Transaction ID and applies the
+          Fee Schedule, ClickHouse serves as the analytical warehouse, and Superset renders the
+          dashboards business stakeholders actually read.
+        </p>
+        <p>
+          The result: a single source of truth for transaction performance — with the reliability
+          and operational maturity expected of a payment-adjacent system, even at POC scale.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEGEND ============ -->
+  <section id="legend">
+    <h2><span class="step-num">2</span> Reading This Diagram</h2>
+    <div class="legend-row">
+      <span class="legend-item"><span class="legend-swatch implemented"></span> Implemented (Issue 01 — infra bootstrap)</span>
+      <span class="legend-item"><span class="legend-swatch planned"></span> Planned (Issues 02–10 — not built yet)</span>
+      <span class="legend-item"><span class="legend-swatch mixed"></span> Partial — service running, no data flowing through it yet</span>
+      <span class="legend-item"><span class="legend-dot partner"></span> Partner-side record</span>
+      <span class="legend-item"><span class="legend-dot bank"></span> Bank-side record</span>
+      <span class="legend-item"><span class="legend-dot merged"></span> Reconciled Transaction</span>
+    </div>
+  </section>
+
+  <!-- ============ ANIMATED FLOW ============ -->
+  <section id="flow">
+    <h2><span class="step-num">3</span> The End-to-End Data Flow</h2>
+
+    <div class="flow-controls">
+      <button id="btnPrev" title="Previous stage (←)">&#8592; Prev</button>
+      <button id="btnPlay" title="Play / Pause">&#9654; Play</button>
+      <button id="btnNext" title="Next stage (→)">Next &#8594;</button>
+      <button id="btnReplay" title="Restart from the beginning">&#8635; Replay</button>
+      <div class="spacer"></div>
+      <span class="stage-counter" id="stageCounter">Stage 1 of 10</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <div class="pipeline-scroll">
+      <div class="pipeline" id="pipeline">
+        <div class="lane-legend">
+          <span><span class="legend-dot partner"></span> Partner</span>
+          <span><span class="legend-dot bank"></span> Bank</span>
+          <span>&#8594; reconciled on shared Transaction ID &#8594;</span>
+          <span><span class="legend-dot merged"></span> Merged</span>
+        </div>
+        <div class="track-line"></div>
+        <div class="dot dot-partner" id="dotPartner"></div>
+        <div class="dot dot-bank" id="dotBank"></div>
+        <div class="dot dot-merged" id="dotMerged"></div>
+        <div class="stage-row" id="stageRow"></div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="detailPanel" aria-live="polite">
+      <!-- populated by JS -->
+    </div>
+
+    <div class="cross-cutting">
+      <div class="cc-card">
+        <h4><span class="status-pill implemented">IMPLEMENTED</span> Apache Airflow — Orchestrator</h4>
+        <p>
+          Runs across every stage above (cross-cutting, not a single stop in the pipeline).
+          Schedules the daily batch run and would trigger extraction and dbt tasks. In Issue 01
+          the webserver and scheduler are live, but the <code>airflow/dags</code> directory is an
+          empty placeholder — no DAGs exist yet.
+        </p>
+      </div>
+      <div class="cc-card">
+        <h4><span class="status-pill implemented">IMPLEMENTED</span> HashiCorp Vault — Secrets</h4>
+        <p>
+          Feeds credentials to every service above at render time (not live runtime reads):
+          <code>seed-secrets.sh</code> writes secrets, <code>render-env-from-vault.sh</code>
+          generates <code>.env</code>, Docker Compose injects it at startup. Dev-mode in-memory
+          storage — a Vault restart means resetting data volumes.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PHASING TABLE ============ -->
+  <section id="phasing">
+    <h2><span class="step-num">4</span> Implementation Phasing (10-Issue Backlog)</h2>
+    <table class="phasing">
+      <thead>
+        <tr><th>Issue</th><th>Title</th><th>Scope</th><th>Status</th></tr>
+      </thead>
+      <tbody id="phasingBody"></tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  Source of truth for this diagram: <code>docs/ARCHITECTURE.md</code> and <code>CONTEXT.md</code>.
+  All flow data (transaction counts, IDs, rates) shown here is illustrative placeholder data for
+  explanatory purposes only — no real data flows through this pipeline yet. Generated as a
+  documentation artifact for the <code>poc-data-pipeline</code> project.
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // Stage data — mirrors docs/ARCHITECTURE.md "How the POC Works" section
+  // ---------------------------------------------------------------------
+  var STAGES = [
+    {
+      title: "Bank & Partner Sources",
+      dual: ["Partner Systems", "Bank Systems"],
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issues 02–05 &middot; mock data generator is Issue 05",
+      description: "Every Transaction touches two independent sides: the Partner (merchant, " +
+        "aggregator, or PSP) that originates it, and the Bank that authorizes and settles the " +
+        "funds. Each side reports its own record of the same Transaction, tagged with a shared, " +
+        "gateway-assigned Transaction ID, through one of four channel types: direct database, " +
+        "Excel file drop, CSV file drop, or Kafka message queue. This POC uses a mock data " +
+        "generator (Issue 05) to produce realistic, cross-source-correlated records instead of " +
+        "connecting to real Bank/Partner systems.",
+      vocab: ["Transaction", "Bank", "Partner"]
+    },
+    {
+      title: "Airbyte Extraction",
+      sub: "4 connector types",
+      status: "mixed",
+      infraLabel: "INFRA: IMPLEMENTED (Issue 01)",
+      dataLabel: "CONNECTORS: PLANNED (Issues 02–04)",
+      description: "Airbyte connectors extract raw records from each of the four source channel " +
+        "types, triggered by Airflow: Postgres CDC for the Bank-DB and Partner-DB sources, SFTP " +
+        "File connectors for Excel/CSV drops, and a Kafka connector to drain the message queue. " +
+        "Airbyte runs in its own local kind Kubernetes cluster (ADR-0020), separate from the " +
+        "Docker Compose stack. In Issue 01 this infrastructure is provisioned via " +
+        "<code>scripts/install-airbyte.sh</code>, but no connectors are configured yet.",
+      vocab: []
+    },
+    {
+      title: "MinIO — Bronze Zone",
+      sub: "Raw Parquet",
+      status: "mixed",
+      infraLabel: "INFRA: IMPLEMENTED (Issue 01)",
+      dataLabel: "DATA: PLANNED (Issues 02–04)",
+      description: "Extracted records land untouched as Parquet files, partitioned by source and " +
+        "date (e.g. <code>bronze/source=bank_db/date=2024-11-01/</code>). Bronze is a faithful, " +
+        "unaltered copy of whatever each source reported that day — nothing is cleaned or " +
+        "reconciled yet. In Issue 01 the <code>data-lake</code> bucket exists (created by the " +
+        "<code>minio-init</code> helper) but is empty.",
+      vocab: []
+    },
+    {
+      title: "MinIO — Silver Zone",
+      sub: "Cleaned Parquet",
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issues 02–04",
+      description: "Bronze records are deduplicated and schema-validated into a cleaned Parquet " +
+        "layer — minimal transformations only. Bank-side and Partner-side records are still " +
+        "separate at this point; dbt staging models read preferentially from silver over bronze.",
+      vocab: []
+    },
+    {
+      title: "dbt Staging Models",
+      dual: ["stg_partner_transactions", "stg_bank_transactions"],
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issues 02–03 &middot; dbt project is a configured skeleton only as of Issue 01",
+      description: "dbt applies light cleanup to produce one staging model per source side. The " +
+        "Partner's view and the Bank's view of the same transactions still live in separate " +
+        "models here — nothing has been joined together yet. In Issue 01, the dbt project " +
+        "(<code>dbt/payment_gateway/</code>) is configured to target ClickHouse, but " +
+        "<code>models/</code> is empty.",
+      vocab: ["Bank", "Partner"]
+    },
+    {
+      title: "Reconciliation",
+      sub: "int_bank_partner_reconciled",
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issue 03",
+      description: "A <strong>FULL OUTER JOIN</strong> on the shared Transaction ID (ADR-0009, " +
+        "ADR-0012) merges the Bank-side and Partner-side staging models — this is the moment the " +
+        "two colored dots above become one. A Transaction becomes visible as soon as either side " +
+        "reports it, with nulls on whichever side hasn't reported yet. This is the model that " +
+        "finally answers &ldquo;how are we actually performing?&rdquo; without manual spreadsheet " +
+        "reconciliation.",
+      vocab: ["Transaction ID"]
+    },
+    {
+      title: "Fee Denormalization",
+      sub: "int_with_applied_fees",
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issue 03",
+      description: "This model looks up the Fee Schedule for the Transaction's specific " +
+        "Partner/Bank pair and calculates the fee <strong>once, at capture time</strong> " +
+        "(ADR-0011). That fee amount is denormalized onto the row permanently — it is never " +
+        "recomputed later via a live join, even if the Fee Schedule changes afterward.",
+      vocab: ["Fee Schedule"]
+    },
+    {
+      title: "Fact & Dimensions",
+      sub: "fct_transactions &middot; dim_*",
+      status: "planned",
+      statusLabel: "PLANNED",
+      issueLine: "Issue 03 (fact) &middot; Issue 06 (dimensions + full dashboard)",
+      description: "<code>fct_transactions</code> is an accumulating-snapshot fact table — one " +
+        "row per Transaction ID, tracking initiated / authorized / captured / settled / failed / " +
+        "refunded timestamps — materialized with ClickHouse's ReplacingMergeTree engine " +
+        "(ADR-0014). All downstream consumers query <code>fct_transactions_current</code>, a " +
+        "dedup view built with <code>argMax()</code>. Conformed dimensions " +
+        "(<code>dim_bank</code>, <code>dim_partner</code>, <code>dim_date</code>, " +
+        "<code>dim_decline_reason</code>) provide shared lookups across every dashboard.",
+      vocab: ["Decline Reason"]
+    },
+    {
+      title: "ClickHouse Warehouse",
+      sub: "Columnar OLAP",
+      status: "mixed",
+      infraLabel: "INFRA: IMPLEMENTED (Issue 01)",
+      dataLabel: "TABLES: PLANNED (Issues 02–07)",
+      description: "dbt materializes fact and dimension models directly into ClickHouse, a " +
+        "columnar database tuned for the GROUP BY / COUNT DISTINCT / SUM query patterns " +
+        "dashboards need. There's no separate gold Parquet zone (ADR-0013) — ClickHouse " +
+        "<em>is</em> the gold layer. In Issue 01 the service is running (port 8124) with default " +
+        "credentials sourced from Vault, but holds no fact or dimension tables yet.",
+      vocab: []
+    },
+    {
+      title: "Superset Dashboards",
+      sub: "Business BI",
+      status: "mixed",
+      infraLabel: "INFRA: IMPLEMENTED (Issue 01)",
+      dataLabel: "DASHBOARDS: PLANNED (Issue 02: 1st chart &middot; Issue 06: full dashboard)",
+      description: "Business stakeholders review daily performance queried live from ClickHouse: " +
+        "Gross and Net transaction volume, Authorization Rate, Settlement Rate, Gross and Net " +
+        "Revenue, Bank/Partner comparisons, and Decline Reason breakdowns. Superset is the only " +
+        "UI meant to be reachable from outside the internal network (ADR-0016). In Issue 01 the " +
+        "service is running at <code>localhost:8088</code> with no dashboards configured.",
+      vocab: ["Authorization Rate", "Settlement Rate", "Gross Volume / Gross Revenue",
+              "Net Volume / Net Revenue", "Decline Reason"]
+    }
+  ];
+
+  var VOCAB_DEFS = {
+    "Transaction": "A payment attempt with a fixed lifecycle: initiated → authorized → " +
+      "captured → settled, plus failed/refunded side-branches. Exactly one Bank and one " +
+      "Partner per transaction.",
+    "Transaction ID": "The gateway-assigned identifier shared by both the Bank-side and " +
+      "Partner-side records of the same transaction, enabling clean reconciliation without fuzzy " +
+      "matching (ADR-0009).",
+    "Bank": "The financial institution that authorizes and settles funds for a transaction — " +
+      "the processing rail.",
+    "Partner": "The upstream entity (merchant, aggregator, or other PSP) that originates a " +
+      "transaction into the gateway.",
+    "Authorization Rate": "% of initiated transactions that reach the authorized state.",
+    "Settlement Rate": "% of authorized transactions that reach the settled state — distinct " +
+      "from Authorization Rate.",
+    "Fee Schedule": "The pricing agreement determining a transaction's fee: a fixed amount plus a " +
+      "percentage of transaction value, specific to each Partner/Bank pair.",
+    "Gross Volume / Gross Revenue": "Volume or revenue across all settled transactions, before " +
+      "subtracting refunds/chargebacks.",
+    "Net Volume / Net Revenue": "Gross minus refunded/charged-back amounts — the headline " +
+      "figure for company performance review.",
+    "Decline Reason": "A categorized cause attached to a declined/failed transaction (e.g. " +
+      "insufficient_funds, fraud_suspected, technical_error, invalid_account)."
+  };
+
+  var MERGE_INDEX = 5; // stage index where partner/bank dots become one merged dot
+  var N = STAGES.length;
+
+  // ---------------------------------------------------------------------
+  // Build stage nodes
+  // ---------------------------------------------------------------------
+  var stageRow = document.getElementById("stageRow");
+  var cols = [];
+
+  STAGES.forEach(function (stage, i) {
+    var col = document.createElement("div");
+    col.className = "stage-col status-" + stage.status;
+    col.setAttribute("role", "button");
+    col.setAttribute("tabindex", "0");
+    col.setAttribute("data-index", String(i));
+    col.setAttribute("aria-label", "Stage " + (i + 1) + " of " + N + ": " + stage.title);
+
+    if (stage.dual) {
+      col.classList.add("mini-wrap");
+      stage.dual.forEach(function (label) {
+        var mini = document.createElement("div");
+        mini.className = "stage-node mini";
+        mini.innerHTML = '<span class="stage-title">' + label + "</span>";
+        col.appendChild(mini);
+      });
+      var badgeWrap = document.createElement("div");
+      badgeWrap.className = "badge";
+      badgeWrap.textContent = stage.statusLabel;
+      col.appendChild(badgeWrap);
+    } else {
+      var node = document.createElement("div");
+      node.className = "stage-node";
+      var badgeHtml;
+      if (stage.status === "mixed") {
+        badgeHtml = '<span class="badge">PARTIAL</span>';
+      } else {
+        badgeHtml = '<span class="badge">' + stage.statusLabel + "</span>";
+      }
+      node.innerHTML = badgeHtml +
+        '<span class="stage-title">' + stage.title + "</span>" +
+        (stage.sub ? '<span class="stage-sub">' + stage.sub + "</span>" : "");
+      col.appendChild(node);
+    }
+
+    col.addEventListener("click", function () { goToStage(i, true); });
+    col.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        goToStage(i, true);
+      }
+    });
+
+    stageRow.appendChild(col);
+    cols.push(col);
+  });
+
+  // ---------------------------------------------------------------------
+  // Dots / merge animation
+  // ---------------------------------------------------------------------
+  var dotPartner = document.getElementById("dotPartner");
+  var dotBank = document.getElementById("dotBank");
+  var dotMerged = document.getElementById("dotMerged");
+
+  function centerPct(i) {
+    return ((i + 0.5) / N) * 100;
+  }
+
+  function renderDots(index) {
+    var x = centerPct(index) + "%";
+    if (index < MERGE_INDEX) {
+      dotPartner.style.left = x;
+      dotPartner.style.top = "calc(50% - 20px)";
+      dotPartner.classList.add("visible");
+
+      dotBank.style.left = x;
+      dotBank.style.top = "calc(50% + 20px)";
+      dotBank.classList.add("visible");
+
+      dotMerged.classList.remove("visible");
+    } else {
+      dotPartner.classList.remove("visible");
+      dotBank.classList.remove("visible");
+
+      dotMerged.style.left = x;
+      dotMerged.style.top = "50%";
+      dotMerged.classList.add("visible");
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Detail panel + phasing table
+  // ---------------------------------------------------------------------
+  var detailPanel = document.getElementById("detailPanel");
+  var stageCounter = document.getElementById("stageCounter");
+  var progressFill = document.getElementById("progressFill");
+
+  function renderDetail(index) {
+    var s = STAGES[index];
+    var statusHtml;
+    if (s.status === "mixed") {
+      statusHtml =
+        '<span class="status-pill implemented">' + s.infraLabel + "</span>" +
+        '<span class="status-pill planned">' + s.dataLabel + "</span>";
+    } else if (s.status === "implemented") {
+      statusHtml = '<span class="status-pill implemented">' + s.statusLabel + "</span>" +
+        '<span class="stage-counter">' + (s.issueLine || "") + "</span>";
+    } else {
+      statusHtml = '<span class="status-pill planned">' + s.statusLabel + "</span>" +
+        '<span class="stage-counter">' + (s.issueLine || "") + "</span>";
+    }
+
+    var vocabHtml = "";
+    if (s.vocab && s.vocab.length) {
+      vocabHtml = '<div class="vocab-row">' + s.vocab.map(function (term) {
+        var def = VOCAB_DEFS[term] || "";
+        return '<span class="vocab-chip" title="' + def.replace(/"/g, "&quot;") + '">' + term + "</span>";
+      }).join("") + "</div>";
+    }
+
+    detailPanel.classList.add("fade");
+    window.setTimeout(function () {
+      detailPanel.innerHTML =
+        '<div class="detail-head"><h3>Stage ' + (index + 1) + " &middot; " + s.title + "</h3>" +
+        statusHtml + "</div>" +
+        '<p class="desc">' + s.description + "</p>" +
+        vocabHtml;
+      detailPanel.classList.remove("fade");
+    }, 150);
+  }
+
+  function updateNodeClasses(index) {
+    cols.forEach(function (col, i) {
+      col.classList.toggle("active", i === index);
+      col.classList.toggle("done", i < index);
+      col.setAttribute("aria-pressed", i === index ? "true" : "false");
+    });
+  }
+
+  function updateCounters(index) {
+    stageCounter.textContent = "Stage " + (index + 1) + " of " + N + " — " + STAGES[index].title;
+    progressFill.style.width = (((index) / (N - 1)) * 100) + "%";
+  }
+
+  // ---------------------------------------------------------------------
+  // State machine
+  // ---------------------------------------------------------------------
+  var current = 0;
+  var playing = false;
+  var timer = null;
+  var AUTO_MS = 4200;
+
+  var btnPrev = document.getElementById("btnPrev");
+  var btnNext = document.getElementById("btnNext");
+  var btnPlay = document.getElementById("btnPlay");
+  var btnReplay = document.getElementById("btnReplay");
+
+  function goToStage(index, userInitiated) {
+    if (index < 0) index = 0;
+    if (index > N - 1) index = N - 1;
+
+    var enteringMerge = (current < MERGE_INDEX && index >= MERGE_INDEX);
+
+    current = index;
+    renderDots(current);
+    updateNodeClasses(current);
+    updateCounters(current);
+    renderDetail(current);
+
+    if (enteringMerge) {
+      var mergeNode = cols[MERGE_INDEX].querySelector(".stage-node");
+      if (mergeNode) {
+        mergeNode.classList.remove("merge-pulse");
+        // force reflow so the animation can restart
+        void mergeNode.offsetWidth;
+        mergeNode.classList.add("merge-pulse");
+      }
+    }
+
+    btnPrev.disabled = current === 0;
+    btnNext.disabled = current === N - 1;
+
+    if (userInitiated) {
+      stopAutoplay();
+    }
+
+    if (current === N - 1) {
+      stopAutoplay();
+    }
+  }
+
+  function startAutoplay() {
+    if (current === N - 1) {
+      goToStage(0, false);
+    }
+    playing = true;
+    btnPlay.innerHTML = "&#10074;&#10074; Pause";
+    clearInterval(timer);
+    timer = window.setInterval(function () {
+      if (current >= N - 1) {
+        stopAutoplay();
+        return;
+      }
+      goToStage(current + 1, false);
+    }, AUTO_MS);
+  }
+
+  function stopAutoplay() {
+    playing = false;
+    btnPlay.innerHTML = "&#9654; Play";
+    clearInterval(timer);
+    timer = null;
+  }
+
+  btnPrev.addEventListener("click", function () { goToStage(current - 1, true); });
+  btnNext.addEventListener("click", function () { goToStage(current + 1, true); });
+  btnPlay.addEventListener("click", function () {
+    if (playing) { stopAutoplay(); } else { startAutoplay(); }
+  });
+  btnReplay.addEventListener("click", function () {
+    stopAutoplay();
+    goToStage(0, false);
+    startAutoplay();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { goToStage(current + 1, true); }
+    if (e.key === "ArrowLeft") { goToStage(current - 1, true); }
+  });
+
+  // initial render
+  goToStage(0, false);
+
+  // ---------------------------------------------------------------------
+  // Phasing table
+  // ---------------------------------------------------------------------
+  var PHASING = [
+    ["01", "Infra bootstrap", "Docker Compose stack + Vault secrets + dbt skeleton", "DONE", true],
+    ["02", "Walking skeleton", "Single source (Partner DB) → bronze/silver/staging/minimal fact → 1 chart", "Planned", false],
+    ["03", "Bank reconciliation + fees", "Add Bank source, full outer join, fee-at-capture denormalization, Auth/Settlement rates", "Planned", false],
+    ["04", "Remaining sources", "SFTP Excel/CSV + Kafka connectors, incorporate into reconciliation", "Planned", false],
+    ["05", "Full mock generator", "Scheduled DAG, 30–90 day backfill, catalog of Banks/Partners, anomalies, reset capability", "Planned", false],
+    ["06", "Dimensions + dashboard", "dim_date/bank/partner/decline_reason, full performance dashboard", "Planned", false],
+    ["07", "Data quality", "dbt tests (not_null, unique, relationships, accepted_values), source freshness checks", "Planned", false],
+    ["08", "Observability", "Prometheus + Grafana + Loki, Teams alerting, runbooks", "Planned", false],
+    ["09", "Security hardening", "PAN-masking validation, encryption at rest/in transit, Superset public exposure with TLS", "Planned", false],
+    ["10", "CI/CD + backups + schema drift", "CI pipeline, daily backups, fail-loud schema drift", "Planned", false]
+  ];
+
+  var phasingBody = document.getElementById("phasingBody");
+  PHASING.forEach(function (row) {
+    var tr = document.createElement("tr");
+    if (row[4]) tr.className = "current-row";
+    var pillClass = row[4] ? "status-pill implemented" : "status-pill planned";
+    tr.innerHTML =
+      '<td class="issue-num">#' + row[0] + "</td>" +
+      "<td>" + row[1] + "</td>" +
+      "<td>" + row[2] + "</td>" +
+      '<td><span class="' + pillClass + '">' + row[3] + "</span></td>";
+    phasingBody.appendChild(tr);
+  });
+
+})();
+</script>
+
+</body>
+</html>
