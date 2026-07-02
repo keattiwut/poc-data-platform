@@ -10,4 +10,5 @@ target/
 dbt_packages/
 logs/
 *.log
+.user.yml
 .DS_Store

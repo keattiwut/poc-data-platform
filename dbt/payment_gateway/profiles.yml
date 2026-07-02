@@ -1,0 +1,11 @@
+payment_gateway:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      schema: default
+      host: localhost
+      port: 8124
+      user: "{{ env_var('CLICKHOUSE_USER') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
+      secure: false
