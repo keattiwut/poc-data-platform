@@ -1,0 +1,14 @@
+<clickhouse>
+    <!--
+      pipeline_ch_admin is the fixed application username (see
+      vault/seed-secrets.sh - only the password is randomized). This grants
+      it named-collection management/usage without a runtime SQL GRANT:
+      access_management=1 alone doesn't cover named collections, which have
+      their own separate control flag.
+    -->
+    <users>
+        <pipeline_ch_admin>
+            <named_collection_control>1</named_collection_control>
+        </pipeline_ch_admin>
+    </users>
+</clickhouse>

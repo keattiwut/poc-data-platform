@@ -14,9 +14,14 @@ SELECT
     failed_at,
     refunded_at,
     updated_at
+-- Credentials come from the `minio_s3` named collection (server-side config,
+-- see clickhouse/config/named_collections.xml), not inline in this query.
+-- ClickHouse masks named-collection secrets in system.named_collections and
+-- the query log, so they never land in this view's stored DDL or dbt's
+-- compiled-SQL build artifacts the way a literal env_var()-injected value
+-- would.
 FROM s3(
-    'http://minio:9000/data-lake/silver/partner_transactions/*.parquet',
-    '{{ env_var("MINIO_ROOT_USER") }}',
-    '{{ env_var("MINIO_ROOT_PASSWORD") }}',
-    'Parquet'
+    minio_s3,
+    url = 'http://minio:9000/data-lake/silver/partner_transactions/*.parquet',
+    format = 'Parquet'
 )

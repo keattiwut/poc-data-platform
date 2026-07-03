@@ -63,7 +63,14 @@ CHART_DATA_TOTAL=$(echo "$CHART_DATA" | python3 -c "import sys,json; print(sum(r
 # (same approach as verify-fct-transactions.sh), rather than a hardcoded
 # expected number - the dataset grows across re-runs during this branch's
 # development.
-CLICKHOUSE_TOTAL=$(curl -sf "http://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@localhost:8124/" --data-binary @- <<'EOSQL'
+# Credentials go through --netrc-file, not embedded in the URL - see
+# scripts/verify-clickhouse.sh for why (visible in `ps aux` otherwise).
+CH_NETRC=$(mktemp)
+trap 'rm -f "$CH_NETRC"' EXIT
+chmod 600 "$CH_NETRC"
+printf 'machine localhost login %s password %s\n' "$CLICKHOUSE_USER" "$CLICKHOUSE_PASSWORD" > "$CH_NETRC"
+
+CLICKHOUSE_TOTAL=$(curl -sf --netrc-file "$CH_NETRC" "http://localhost:8124/" --data-binary @- <<'EOSQL'
 SELECT count(*) FROM fct_transactions_current
 EOSQL
 )
