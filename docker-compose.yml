@@ -128,6 +128,12 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      # Read by clickhouse/config/named_collections.xml (from_env) so the
+      # `minio_s3` named collection never has the raw values in its own
+      # config - ClickHouse masks named collection secrets in
+      # system.named_collections and the query log.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       # Host-side 8123 collides with a pre-existing socksproxy.exe Windows
       # service bound to 127.0.0.1:8123 on this dev machine; remapped to
@@ -136,6 +142,8 @@ services:
       - "9002:9000"
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config/named_collections.xml:/etc/clickhouse-server/config.d/named_collections.xml:ro
+      - ./clickhouse/config/users.d/grant-named-collections.xml:/etc/clickhouse-server/users.d/grant-named-collections.xml:ro
     ulimits:
       nofile:
         soft: 262144

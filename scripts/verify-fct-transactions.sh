@@ -3,7 +3,14 @@ set -euo pipefail
 set -a; source .env; set +a
 
 echo "Checking fct_transactions_current has rows, Bank-side columns null, no duplicate transaction_ids..."
-RESULT=$(curl -sf "http://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@localhost:8124/" --data-binary @- <<'EOSQL'
+# Credentials go through --netrc-file, not embedded in the URL - see
+# scripts/verify-clickhouse.sh for why (visible in `ps aux` otherwise).
+CH_NETRC=$(mktemp)
+trap 'rm -f "$CH_NETRC"' EXIT
+chmod 600 "$CH_NETRC"
+printf 'machine localhost login %s password %s\n' "$CLICKHOUSE_USER" "$CLICKHOUSE_PASSWORD" > "$CH_NETRC"
+
+RESULT=$(curl -sf --netrc-file "$CH_NETRC" "http://localhost:8124/" --data-binary @- <<'EOSQL'
 SELECT
     count(*) AS total_rows,
     countIf(bank_id IS NOT NULL) AS non_null_bank_rows,
