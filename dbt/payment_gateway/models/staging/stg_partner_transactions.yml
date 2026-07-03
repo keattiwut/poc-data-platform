@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_partner_transactions
+    description: >
+      Partner-side Transaction records, staged from the lake's silver zone.
+      One row per Transaction ID (already deduplicated by the bronze-to-silver
+      promotion step). No Bank-side data - that's Issue 03.
+    columns:
+      - name: transaction_id
+        description: Gateway-assigned Transaction ID (CONTEXT.md).
+      - name: partner_id
+        description: The Partner that originated this transaction.
+      - name: state
+        description: Current lifecycle state - initiated/authorized/captured/settled/failed/refunded.
