@@ -27,9 +27,9 @@ SELECT
     refunded_at,
     -- Bank side: intentionally NULL until Issue 03 adds the reconciliation join (ADR-0012)
     CAST(NULL AS Nullable(String)) AS bank_id,
-    CAST(NULL AS Nullable(DateTime)) AS bank_authorized_at,
-    CAST(NULL AS Nullable(DateTime)) AS bank_captured_at,
-    CAST(NULL AS Nullable(DateTime)) AS bank_settled_at,
+    CAST(NULL AS Nullable(DateTime64(6, 'UTC'))) AS bank_authorized_at,
+    CAST(NULL AS Nullable(DateTime64(6, 'UTC'))) AS bank_captured_at,
+    CAST(NULL AS Nullable(DateTime64(6, 'UTC'))) AS bank_settled_at,
     -- ReplacingMergeTree's version column must not be Nullable either (same
     -- upstream-view-is-all-Nullable reason as transaction_id above).
     CAST(updated_at AS DateTime64(6, 'UTC')) AS updated_at
