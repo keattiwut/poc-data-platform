@@ -218,6 +218,23 @@ echo "Destination: ${DEST_ID}"
 
 # --- Connection (check-before-create) ---------------------------------------
 export SOURCE_ID DEST_ID
+# The Postgres source connects at the database level, so Airbyte's discovery
+# sees every table in the database (both bank_transactions AND
+# partner_transactions) as candidate streams - not just the one this
+# connection cares about. The public API's POST /connections does NOT default
+# to "sync all discovered streams" when `configurations` is omitted (verified
+# empirically against this live instance: an omitted `configurations` produced
+# a connection with `configurations.streams: []`, which then fails every sync
+# with a destination-side "Catalog must have at least one stream" config
+# error). The stream to sync must be explicitly selected.
+STREAM_NAME="bank_transactions"
+export STREAM_NAME
+CONN_STREAMS_CONFIG=$(python3 -c '
+import json, os
+print(json.dumps({"streams": [{"name": os.environ["STREAM_NAME"], "syncMode": "full_refresh_overwrite"}]}))
+')
+export CONN_STREAMS_CONFIG
+
 echo "Checking for existing connection between source and destination..."
 CONNECTIONS_RESPONSE=$(api_get "/connections?workspaceIds=${WORKSPACE_ID}") || exit 1
 CONNECTION_ID=$(echo "$CONNECTIONS_RESPONSE" | python3 -c '
@@ -228,17 +245,22 @@ print(match[0] if match else "")
 ')
 
 if [ -z "$CONNECTION_ID" ]; then
-  echo "Creating connection (full refresh | overwrite, Airbyte's auto-discovered default sync mode)..."
+  echo "Creating connection (full refresh | overwrite, stream '${STREAM_NAME}' explicitly selected)..."
   # nonBreakingSchemaUpdatesBehavior defaults to "ignore" if omitted (see the
   # partner-connection schema-drift note below for how this bit us on
   # partner_transactions). Set "propagate_columns" up front here so any
   # future column added to bank_transactions gets picked up automatically
   # on its next sync instead of silently dropped.
-  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"], "nonBreakingSchemaUpdatesBehavior": "propagate_columns"}))')
+  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"], "nonBreakingSchemaUpdatesBehavior": "propagate_columns", "configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
   CREATE_CONN_RESPONSE=$(api_post "/connections" "${CREATE_CONN_PAYLOAD}") || exit 1
   CONNECTION_ID=$(echo "$CREATE_CONN_RESPONSE" | python3 -c 'import json, sys; print(json.load(sys.stdin)["connectionId"])')
 else
-  echo "Found existing connection ${CONNECTION_ID}"
+  echo "Found existing connection ${CONNECTION_ID}; ensuring stream '${STREAM_NAME}' is selected..."
+  # Idempotent repair: an existing connection created before this fix (or by
+  # any other means) may still have an empty stream list, which silently
+  # breaks every sync. Re-assert the correct stream configuration on rerun.
+  UPDATE_CONN_STREAMS_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
+  api_patch "/connections/${CONNECTION_ID}" "${UPDATE_CONN_STREAMS_PAYLOAD}" > /dev/null || exit 1
 fi
 echo "Connection: ${CONNECTION_ID}"
 
