@@ -227,13 +227,27 @@ match = [c["connectionId"] for c in data if c["sourceId"] == os.environ["SOURCE_
 print(match[0] if match else "")
 ')
 
+STREAM_NAME="partner_transactions"
+# Airbyte's public API does not default an omitted `configurations` to
+# "sync all discovered streams" despite what the docs imply - empirically,
+# omitting it creates a connection with zero streams selected, which fails
+# at sync time with "Catalog must have at least one stream". The stream
+# must be explicitly selected (found and fixed live against a real 2.1.0
+# instance during Issue 03's Task 2 - see that task's report).
+CONN_STREAMS_CONFIG=$(python3 -c "import json; print(json.dumps({'streams': [{'name': '${STREAM_NAME}', 'syncMode': 'full_refresh_overwrite'}]}))")
+
 if [ -z "$CONNECTION_ID" ]; then
-  echo "Creating connection (full refresh | overwrite, Airbyte's auto-discovered default sync mode)..."
-  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"]}))')
+  echo "Creating connection (full refresh | overwrite, ${STREAM_NAME} stream)..."
+  export CONN_STREAMS_CONFIG
+  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"], "configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
   CREATE_CONN_RESPONSE=$(api_post "/connections" "${CREATE_CONN_PAYLOAD}") || exit 1
   CONNECTION_ID=$(echo "$CREATE_CONN_RESPONSE" | python3 -c 'import json, sys; print(json.load(sys.stdin)["connectionId"])')
 else
   echo "Found existing connection ${CONNECTION_ID}"
+  echo "Ensuring stream '${STREAM_NAME}' is selected (self-heal for connections created before this fix)..."
+  export CONNECTION_ID CONN_STREAMS_CONFIG
+  UPDATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
+  api_patch "/connections/${CONNECTION_ID}" "${UPDATE_CONN_PAYLOAD}" > /dev/null || exit 1
 fi
 echo "Connection: ${CONNECTION_ID}"
 
