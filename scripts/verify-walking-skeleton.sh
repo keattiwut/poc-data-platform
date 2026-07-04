@@ -20,8 +20,8 @@ echo "=== Syncing Airbyte Postgres -> MinIO bronze ==="
 ./scripts/verify-airbyte-bronze-sync.sh
 
 echo "=== Promoting bronze -> silver ==="
-python3 scripts/promote-bronze-to-silver.py
-./scripts/verify-silver-promotion.sh
+python3 scripts/promote-bronze-to-silver.py partner_transactions
+./scripts/verify-silver-promotion.sh partner_transactions
 
 echo "=== Running dbt models ==="
 (cd dbt/payment_gateway && DBT_PROFILES_DIR=. dbt run)
