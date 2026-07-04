@@ -24,12 +24,20 @@
 -- int_partner_transactions.sql's header comment for the verified fix
 -- (snapshot each staging view into a real table first, then join those).
 --
--- Two smaller things also verified against the real instance:
--- 1. `stg_partner_transactions` has no `bank_id` column at all (only
---    `stg_bank_transactions` does), so bank_id can only come from `bank`,
---    not from a coalesce() across both sides.
--- 2. `FULL OUTER JOIN` is accepted verbatim by this ClickHouse version, no
---    rewrite to `FULL JOIN` needed.
+-- One smaller thing also verified against the real instance: `FULL OUTER
+-- JOIN` is accepted verbatim by this ClickHouse version, no rewrite to
+-- `FULL JOIN` needed.
+--
+-- bank_id: both sides know it (the mock gateway already knows which bank a
+-- transaction is routed to, so it writes bank_id on partner_transactions
+-- too, not just bank_transactions - see stg_partner_transactions.sql). Use
+-- coalesce(partner.bank_id, bank.bank_id) so a Partner-only orphan (Bank
+-- hasn't reported yet) still carries its bank_id through to the fee-schedule
+-- lookup in fct_transactions.sql, instead of going NULL and silently
+-- dropping its fee. This coalesce is safe from the s3()-view join bug above
+-- because both sides here are already-materialized tables
+-- (int_partner_transactions / int_bank_transactions), not the raw
+-- s3()-backed staging views.
 
 WITH partner AS (
     SELECT * FROM {{ ref('int_partner_transactions') }}
@@ -50,7 +58,7 @@ SELECT
     partner.settled_at,
     partner.failed_at,
     partner.refunded_at,
-    bank.bank_id AS bank_id,
+    coalesce(partner.bank_id, bank.bank_id) AS bank_id,
     bank.state AS bank_state,
     bank.decline_reason AS bank_decline_reason,
     bank.authorized_at AS bank_authorized_at,

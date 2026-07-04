@@ -13,8 +13,8 @@ SELECT
     count(*) AS total_rows,
     count(*) - count(DISTINCT transaction_id) AS duplicate_transaction_ids,
     countIf(initiated_at IS NULL AND bank_id IS NOT NULL) AS bank_only_rows,
-    countIf(initiated_at IS NOT NULL AND bank_id IS NULL) AS partner_only_rows,
-    countIf(bank_captured_at IS NOT NULL AND fee_amount_cents IS NULL) AS captured_without_fee,
+    countIf(initiated_at IS NOT NULL AND bank_state IS NULL) AS partner_only_rows,
+    countIf((captured_at IS NOT NULL OR bank_captured_at IS NOT NULL) AND fee_amount_cents IS NULL) AS captured_without_fee,
     countIf(fee_amount_cents IS NOT NULL) AS rows_with_fee
 FROM fct_transactions_current
 FORMAT TabSeparated
@@ -41,11 +41,11 @@ if [ "${BANK_ONLY:-0}" -lt 1 ]; then
   exit 1
 fi
 if [ "${PARTNER_ONLY:-0}" -lt 1 ]; then
-  echo "FAIL: expected at least one Partner-only orphan row (initiated_at set, bank_id NULL) - full outer join is not preserving Partner-only transactions"
+  echo "FAIL: expected at least one Partner-only orphan row (initiated_at set, bank_state NULL) - full outer join is not preserving Partner-only transactions"
   exit 1
 fi
 if [ "${CAPTURED_WITHOUT_FEE:-1}" -ne 0 ]; then
-  echo "FAIL: found ${CAPTURED_WITHOUT_FEE} captured transaction(s) with no fee computed - fee-at-capture logic is broken"
+  echo "FAIL: found ${CAPTURED_WITHOUT_FEE} transaction(s) captured on either side with no fee computed - fee-at-capture logic is broken"
   exit 1
 fi
 if [ "${WITH_FEE:-0}" -lt 1 ]; then

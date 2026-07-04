@@ -111,7 +111,11 @@ def to_bank_row(outcome: dict) -> dict:
     authorization on the partner side still has a bank record (state=failed,
     decline_reason set), since the Bank is the one making that decision."""
     delta = random.randint(0, 5)
-    bank_state = outcome["state"] if outcome["state"] != "initiated" else "failed"
+    # build_transaction() always overwrites outcome["state"] away from
+    # "initiated" before returning (either to "authorized"/"settled" on the
+    # auth path, or "failed" otherwise), so it can never reach here as
+    # "initiated". No fallback needed.
+    bank_state = outcome["state"]
     return {
         "transaction_id": outcome["transaction_id"],
         "partner_id": outcome["partner_id"],

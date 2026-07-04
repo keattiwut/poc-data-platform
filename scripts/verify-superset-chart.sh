@@ -64,9 +64,8 @@ check_chart_has_data() {
   fi
 
   echo "PASS: chart '${chart_name}' returns real data (${row_count} row(s))"
-  # Export chart_data/chart_id for callers that want to do extra checks
-  # (e.g. the "Transaction Volume by Day" cross-check below).
-  LAST_CHART_ID="$chart_id"
+  # Export chart_data for callers that want to do extra checks (e.g. the
+  # "Transaction Volume by Day" cross-check below).
   LAST_CHART_DATA="$chart_data"
 }
 
