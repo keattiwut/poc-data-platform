@@ -95,6 +95,131 @@ api_get_filtered() {
 api_post() { http_call POST "$1" "$2"; }
 api_put()  { http_call PUT  "$1" "$2"; }
 
+# --- Big Number chart helper (check-before-create) --------------------------
+# viz_type "big_number_total" is a "new-style" Superset viz plugin: unlike
+# echarts_timeseries_bar it has no backing class in superset/viz.py, so its
+# query is generated purely from the generic query_context/QueryObject shape
+# - confirmed by grepping the running 4.1.1 image's superset/viz.py for
+# "big_number" (no matches). Its form_data uses a *singular* "metric" key
+# (not the "metrics" list echarts_timeseries_bar uses), but the resolved
+# query_context queries[].metrics is still a one-element list, same as any
+# other viz type - this was confirmed empirically against the live instance
+# before being baked in here (see task-6-report.md for the trial output).
+#
+# The metric itself is an "adhoc metric" object with expressionType "SQL",
+# which lets us hand ClickHouse the exact ratio/sum expression instead of
+# picking from Superset's canned aggregate list (COUNT/SUM/AVG/etc, which
+# can't express `countIf(...) / countIf(...)`). Verified query rendered by
+# Superset for the Authorization Rate metric:
+#   SELECT countIf(authorized_at IS NOT NULL) / countIf(initiated_at IS NOT NULL) * 100 AS `Authorization Rate_...`
+#   FROM `default`.`fct_transactions_current` LIMIT 1;
+# which returned 90.625 against the live data, matching a hand-run
+# countIf(...)/countIf(...)*100 query - so the percentage-as-0-100-number
+# approach (multiply by 100 in SQL) was chosen over Superset's percentage
+# number-format option, since it keeps the raw value self-describing without
+# depending on a separate display-format setting.
+#
+# Sets the global CHART_ID to the resulting chart's id (mirrors the flat,
+# non-subshell style used elsewhere in this script, so the informational
+# `echo` lines below stay visible instead of being swallowed by command
+# substitution).
+configure_big_number_chart() {
+  local chart_name="$1" sql_expression="$2" metric_label="$3"
+
+  echo "Checking for existing '${chart_name}' chart..."
+  local chart_search
+  chart_search=$(api_get_filtered "/api/v1/chart/" "(filters:!((col:slice_name,opr:eq,value:'${chart_name}')))") || exit 1
+  CHART_ID=$(echo "$chart_search" | python3 -c 'import sys,json; r=json.load(sys.stdin)["result"]; print(r[0]["id"] if r else "")')
+
+  local metric_json
+  metric_json=$(SQL_EXPR="$sql_expression" METRIC_LABEL="$metric_label" python3 -c '
+import json, os
+print(json.dumps({
+    "expressionType": "SQL",
+    "sqlExpression": os.environ["SQL_EXPR"],
+    "label": os.environ["METRIC_LABEL"],
+    "hasCustomLabel": True,
+}))
+')
+
+  local chart_params
+  chart_params=$(DATASET_ID="$DATASET_ID" METRIC_JSON="$metric_json" python3 -c '
+import json, os
+dataset_id = int(os.environ["DATASET_ID"])
+metric = json.loads(os.environ["METRIC_JSON"])
+print(json.dumps({
+    "datasource": f"{dataset_id}__table",
+    "viz_type": "big_number_total",
+    "metric": metric,
+    "adhoc_filters": [],
+}))
+')
+
+  local chart_query_context
+  chart_query_context=$(DATASET_ID="$DATASET_ID" METRIC_JSON="$metric_json" python3 -c '
+import json, os
+dataset_id = int(os.environ["DATASET_ID"])
+metric = json.loads(os.environ["METRIC_JSON"])
+print(json.dumps({
+    "datasource": {"id": dataset_id, "type": "table"},
+    "force": False,
+    "queries": [{
+        "metrics": [metric],
+        "groupby": [],
+        "extras": {},
+        "orderby": [],
+        "annotation_layers": [],
+        "row_limit": 1,
+        "time_offsets": [],
+        "post_processing": [],
+        "time_range": "No filter",
+        "is_timeseries": False,
+    }],
+    "form_data": {
+        "datasource": f"{dataset_id}__table",
+        "viz_type": "big_number_total",
+        "metric": metric,
+        "adhoc_filters": [],
+    },
+    "result_format": "json",
+    "result_type": "full",
+}))
+')
+
+  if [ -z "$CHART_ID" ]; then
+    echo "Creating '${chart_name}' chart on dataset ${DATASET_ID}..."
+    local chart_payload
+    chart_payload=$(CHART_NAME="$chart_name" DATASET_ID="$DATASET_ID" CHART_PARAMS="$chart_params" CHART_QUERY_CONTEXT="$chart_query_context" python3 -c '
+import json, os
+print(json.dumps({
+    "slice_name": os.environ["CHART_NAME"],
+    "viz_type": "big_number_total",
+    "datasource_id": int(os.environ["DATASET_ID"]),
+    "datasource_type": "table",
+    "params": os.environ["CHART_PARAMS"],
+    "query_context": os.environ["CHART_QUERY_CONTEXT"],
+    "query_context_generation": True,
+}))
+')
+    local chart_response
+    chart_response=$(api_post "/api/v1/chart/" "$chart_payload") || exit 1
+    CHART_ID=$(echo "$chart_response" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+  else
+    echo "Found existing chart ${CHART_ID}; refreshing its params/query_context..."
+    local update_chart_payload
+    update_chart_payload=$(CHART_PARAMS="$chart_params" CHART_QUERY_CONTEXT="$chart_query_context" python3 -c '
+import json, os
+print(json.dumps({
+    "params": os.environ["CHART_PARAMS"],
+    "query_context": os.environ["CHART_QUERY_CONTEXT"],
+    "query_context_generation": True,
+}))
+')
+    api_put "/api/v1/chart/${CHART_ID}" "$update_chart_payload" > /dev/null || exit 1
+  fi
+  echo "Chart: ${CHART_ID}"
+}
+
 # --- Database (check-before-create) ---------------------------------------
 DB_NAME="ClickHouse"
 # Container-internal ClickHouse port is 8123 on the Compose service name
@@ -260,6 +385,24 @@ print(json.dumps({
   api_put "/api/v1/chart/${CHART_ID}" "$UPDATE_CHART_PAYLOAD" > /dev/null || exit 1
 fi
 echo "Chart: ${CHART_ID}"
+VOLUME_CHART_ID="$CHART_ID"
+
+# --- Authorization Rate, Settlement Rate, Gross Revenue (Big Number charts,
+# check-before-create) --------------------------------------------------------
+configure_big_number_chart "Authorization Rate" \
+  "countIf(authorized_at IS NOT NULL) / countIf(initiated_at IS NOT NULL) * 100" \
+  "Authorization Rate"
+AUTH_RATE_CHART_ID="$CHART_ID"
+
+configure_big_number_chart "Settlement Rate" \
+  "countIf(settled_at IS NOT NULL) / countIf(authorized_at IS NOT NULL) * 100" \
+  "Settlement Rate"
+SETTLEMENT_RATE_CHART_ID="$CHART_ID"
+
+configure_big_number_chart "Gross Revenue" \
+  "sum(fee_amount_cents)" \
+  "Gross Revenue"
+GROSS_REVENUE_CHART_ID="$CHART_ID"
 
 # --- Dashboard (check-before-create) ----------------------------------------
 DASHBOARD_TITLE="Transaction Volume"
@@ -281,57 +424,89 @@ else
 fi
 echo "Dashboard: ${DASHBOARD_ID}"
 
-# --- Attach chart to dashboard (idempotent: re-PUTting the same
+# --- Attach all four charts to dashboard (idempotent: re-PUTting the same
 # association is a no-op) ----------------------------------------------------
-echo "Attaching chart ${CHART_ID} to dashboard ${DASHBOARD_ID}..."
 ATTACH_PAYLOAD=$(DASHBOARD_ID="$DASHBOARD_ID" python3 -c '
 import json, os
 print(json.dumps({"dashboards": [int(os.environ["DASHBOARD_ID"])]}))
 ')
-api_put "/api/v1/chart/${CHART_ID}" "$ATTACH_PAYLOAD" > /dev/null || exit 1
+for chart_id in "$VOLUME_CHART_ID" "$AUTH_RATE_CHART_ID" "$SETTLEMENT_RATE_CHART_ID" "$GROSS_REVENUE_CHART_ID"; do
+  echo "Attaching chart ${chart_id} to dashboard ${DASHBOARD_ID}..."
+  api_put "/api/v1/chart/${chart_id}" "$ATTACH_PAYLOAD" > /dev/null || exit 1
+done
 
-# --- Dashboard layout: put the chart on the grid so it actually renders
-# when opened, instead of an empty dashboard that merely "owns" the chart
-# via the many-to-many relation set above. ----------------------------------
-POSITION_JSON=$(CHART_ID="$CHART_ID" CHART_NAME="$CHART_NAME" python3 -c '
+# --- Dashboard layout: put all four charts on the grid so they actually
+# render when the dashboard is opened, instead of merely being "owned" by it
+# via the many-to-many relation set above. "Transaction Volume by Day" keeps
+# its own full-width row; the three Big Number charts sit together in a
+# second row at width 4 each (3 x 4 = 12, Superset's full grid width). ------
+POSITION_JSON=$(
+  VOLUME_CHART_ID="$VOLUME_CHART_ID" \
+  AUTH_RATE_CHART_ID="$AUTH_RATE_CHART_ID" \
+  SETTLEMENT_RATE_CHART_ID="$SETTLEMENT_RATE_CHART_ID" \
+  GROSS_REVENUE_CHART_ID="$GROSS_REVENUE_CHART_ID" \
+  python3 -c '
 import json, os
-chart_id = int(os.environ["CHART_ID"])
-chart_key = f"CHART-{chart_id}"
+
+volume_id = int(os.environ["VOLUME_CHART_ID"])
+big_number_ids = [
+    (int(os.environ["AUTH_RATE_CHART_ID"]), "Authorization Rate"),
+    (int(os.environ["SETTLEMENT_RATE_CHART_ID"]), "Settlement Rate"),
+    (int(os.environ["GROSS_REVENUE_CHART_ID"]), "Gross Revenue"),
+]
+
+def chart_node(chart_id, slice_name, width, row_id):
+    chart_key = f"CHART-{chart_id}"
+    return chart_key, {
+        "type": "CHART",
+        "id": chart_key,
+        "children": [],
+        "parents": ["ROOT_ID", "GRID_ID", row_id],
+        "meta": {
+            "chartId": chart_id,
+            "width": width,
+            "height": 50,
+            "sliceName": slice_name,
+        },
+    }
+
 position = {
     "DASHBOARD_VERSION_KEY": "v2",
     "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},
     "GRID_ID": {
         "type": "GRID",
         "id": "GRID_ID",
-        "children": ["ROW-1"],
+        "children": ["ROW-1", "ROW-2"],
         "parents": ["ROOT_ID"],
     },
     "ROW-1": {
         "type": "ROW",
         "id": "ROW-1",
-        "children": [chart_key],
+        "children": [f"CHART-{volume_id}"],
         "parents": ["ROOT_ID", "GRID_ID"],
         "meta": {"background": "BACKGROUND_TRANSPARENT"},
     },
-    chart_key: {
-        "type": "CHART",
-        "id": chart_key,
-        "children": [],
-        "parents": ["ROOT_ID", "GRID_ID", "ROW-1"],
-        "meta": {
-            "chartId": chart_id,
-            "width": 12,
-            "height": 50,
-            "sliceName": os.environ["CHART_NAME"],
-        },
+    "ROW-2": {
+        "type": "ROW",
+        "id": "ROW-2",
+        "children": [f"CHART-{cid}" for cid, _ in big_number_ids],
+        "parents": ["ROOT_ID", "GRID_ID"],
+        "meta": {"background": "BACKGROUND_TRANSPARENT"},
     },
 }
+volume_key, volume_node = chart_node(volume_id, "Transaction Volume by Day", 12, "ROW-1")
+position[volume_key] = volume_node
+for cid, name in big_number_ids:
+    key, node = chart_node(cid, name, 4, "ROW-2")
+    position[key] = node
+
 print(json.dumps(position))
-')
+'
+)
 DASHBOARD_UPDATE_PAYLOAD=$(POSITION_JSON="$POSITION_JSON" python3 -c '
 import json, os
 print(json.dumps({"position_json": os.environ["POSITION_JSON"]}))
 ')
 api_put "/api/v1/dashboard/${DASHBOARD_ID}" "$DASHBOARD_UPDATE_PAYLOAD" > /dev/null || exit 1
 
-echo "PASS: ClickHouse database (${DB_ID}), dataset (${DATASET_ID}), chart '${CHART_NAME}' (${CHART_ID}), and dashboard '${DASHBOARD_TITLE}' (${DASHBOARD_ID}) are configured in Superset"
+echo "PASS: ClickHouse database (${DB_ID}), dataset (${DATASET_ID}), charts 'Transaction Volume by Day' (${VOLUME_CHART_ID}), 'Authorization Rate' (${AUTH_RATE_CHART_ID}), 'Settlement Rate' (${SETTLEMENT_RATE_CHART_ID}), 'Gross Revenue' (${GROSS_REVENUE_CHART_ID}), and dashboard '${DASHBOARD_TITLE}' (${DASHBOARD_ID}) are configured in Superset"
