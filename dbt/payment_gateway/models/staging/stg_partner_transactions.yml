@@ -5,11 +5,17 @@ models:
     description: >
       Partner-side Transaction records, staged from the lake's silver zone.
       One row per Transaction ID (already deduplicated by the bronze-to-silver
-      promotion step). No Bank-side data - that's Issue 03.
+      promotion step).
     columns:
       - name: transaction_id
-        description: Gateway-assigned Transaction ID (CONTEXT.md).
+        description: Gateway-assigned Transaction ID (CONTEXT.md), shared with stg_bank_transactions.
       - name: partner_id
         description: The Partner that originated this transaction.
+      - name: bank_id
+        description: >
+          The Bank this transaction was routed to. The mock gateway knows
+          both sides' routing up front, so this is populated on every
+          Partner-side row (including Partner-only orphans where the Bank
+          hasn't reported yet), not just on stg_bank_transactions.
       - name: state
         description: Current lifecycle state - initiated/authorized/captured/settled/failed/refunded.

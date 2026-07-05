@@ -1,0 +1,10 @@
+partner_id,bank_id,fixed_fee_cents,percentage_bps
+partner_acme,bank_chase,30,250
+partner_acme,bank_wells_fargo,25,220
+partner_acme,bank_citibank,35,260
+partner_globex,bank_chase,20,200
+partner_globex,bank_wells_fargo,15,180
+partner_globex,bank_citibank,25,210
+partner_initech,bank_chase,40,300
+partner_initech,bank_wells_fargo,35,280
+partner_initech,bank_citibank,45,310

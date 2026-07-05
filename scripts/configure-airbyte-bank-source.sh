@@ -3,15 +3,16 @@ set -euo pipefail
 
 # --- WSL2 dispatch -------------------------------------------------------
 # abctl (used below to fetch Airbyte's API application credentials) does
-# not support native Windows. Same pattern as scripts/install-airbyte.sh
-# and scripts/verify-airbyte.sh: re-exec inside WSL2 if invoked from a
-# native Windows shell (Git Bash/MSYS). No-op on WSL2/Linux/macOS.
+# not support native Windows. Same pattern as scripts/install-airbyte.sh,
+# scripts/verify-airbyte.sh, and scripts/configure-airbyte-partner-source.sh:
+# re-exec inside WSL2 if invoked from a native Windows shell (Git Bash/MSYS).
+# No-op on WSL2/Linux/macOS.
 if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
   echo "Detected native Windows shell - re-executing inside WSL2 (per Airbyte's guidance)..."
   WIN_DIR="$(pwd -W)"
   DRIVE="$(echo "${WIN_DIR:0:1}" | tr 'A-Z' 'a-z')"
   WSL_DIR="/mnt/${DRIVE}${WIN_DIR:2}"
-  exec wsl.exe -d Ubuntu -- bash -lc "cd '${WSL_DIR}' && ./scripts/configure-airbyte-partner-source.sh"
+  exec wsl.exe -d Ubuntu -- bash -lc "cd '${WSL_DIR}' && ./scripts/configure-airbyte-bank-source.sh"
 fi
 # ---------------------------------------------------------------------------
 
@@ -39,13 +40,12 @@ API="${AIRBYTE_URL}/api/public/v1"
 # different Docker network than docker-compose's `payment-gateway-net`, so
 # the Compose service names `postgres`/`minio` do not resolve there.
 #
-# Empirically verified (see .superpowers/sdd/task-2-report.md for the full
-# investigation): this machine's abctl/kind cluster and the docker-compose
-# services run under the same Docker Desktop daemon, and `host.docker.internal`
-# resolves inside kind's pods (to the Docker Desktop VM's host-reachable
-# address) and successfully reaches the Compose services' published host
-# ports. Confirmed via a debug pod: MinIO's health endpoint returned HTTP 200
-# and a raw TCP connect to port 5432 succeeded.
+# Empirically verified in scripts/configure-airbyte-partner-source.sh (see
+# .superpowers/sdd/task-2-report.md for this task's own re-verification):
+# this machine's abctl/kind cluster and the docker-compose services run
+# under the same Docker Desktop daemon, and `host.docker.internal` resolves
+# inside kind's pods and successfully reaches the Compose services'
+# published host ports.
 export POSTGRES_REACHABLE_HOST="host.docker.internal"
 export MINIO_REACHABLE_HOST="host.docker.internal"
 export POSTGRES_PORT_FOR_AIRBYTE="${POSTGRES_PORT:-5432}"
@@ -137,8 +137,8 @@ WORKSPACE_ID=$(echo "$WORKSPACES_RESPONSE" | python3 -c 'import json, sys; print
 echo "Workspace: ${WORKSPACE_ID}"
 export WORKSPACE_ID
 
-SOURCE_NAME="partner-transactions-postgres-source"
-DEST_NAME="minio-bronze-destination"
+SOURCE_NAME="bank-transactions-postgres-source"
+DEST_NAME="minio-bank-bronze-destination"
 export SOURCE_NAME DEST_NAME
 
 # --- Postgres source (check-before-create) ---------------------------------
@@ -185,7 +185,7 @@ import json, os
 print(json.dumps({
     "destinationType": "s3",
     "s3_bucket_name": "data-lake",
-    "s3_bucket_path": "bronze/partner_transactions",
+    "s3_bucket_path": "bronze/bank_transactions",
     "s3_bucket_region": "",
     "s3_endpoint": "http://{}:{}".format(os.environ["MINIO_REACHABLE_HOST"], os.environ["MINIO_PORT_FOR_AIRBYTE"]),
     "access_key_id": os.environ["MINIO_ROOT_USER"],
@@ -218,6 +218,23 @@ echo "Destination: ${DEST_ID}"
 
 # --- Connection (check-before-create) ---------------------------------------
 export SOURCE_ID DEST_ID
+# The Postgres source connects at the database level, so Airbyte's discovery
+# sees every table in the database (both bank_transactions AND
+# partner_transactions) as candidate streams - not just the one this
+# connection cares about. The public API's POST /connections does NOT default
+# to "sync all discovered streams" when `configurations` is omitted (verified
+# empirically against this live instance: an omitted `configurations` produced
+# a connection with `configurations.streams: []`, which then fails every sync
+# with a destination-side "Catalog must have at least one stream" config
+# error). The stream to sync must be explicitly selected.
+STREAM_NAME="bank_transactions"
+export STREAM_NAME
+CONN_STREAMS_CONFIG=$(python3 -c '
+import json, os
+print(json.dumps({"streams": [{"name": os.environ["STREAM_NAME"], "syncMode": "full_refresh_overwrite"}]}))
+')
+export CONN_STREAMS_CONFIG
+
 echo "Checking for existing connection between source and destination..."
 CONNECTIONS_RESPONSE=$(api_get "/connections?workspaceIds=${WORKSPACE_ID}") || exit 1
 CONNECTION_ID=$(echo "$CONNECTIONS_RESPONSE" | python3 -c '
@@ -227,29 +244,95 @@ match = [c["connectionId"] for c in data if c["sourceId"] == os.environ["SOURCE_
 print(match[0] if match else "")
 ')
 
-STREAM_NAME="partner_transactions"
-# Airbyte's public API does not default an omitted `configurations` to
-# "sync all discovered streams" despite what the docs imply - empirically,
-# omitting it creates a connection with zero streams selected, which fails
-# at sync time with "Catalog must have at least one stream". The stream
-# must be explicitly selected (found and fixed live against a real 2.1.0
-# instance during Issue 03's Task 2 - see that task's report).
-CONN_STREAMS_CONFIG=$(python3 -c "import json; print(json.dumps({'streams': [{'name': '${STREAM_NAME}', 'syncMode': 'full_refresh_overwrite'}]}))")
-
 if [ -z "$CONNECTION_ID" ]; then
-  echo "Creating connection (full refresh | overwrite, ${STREAM_NAME} stream)..."
-  export CONN_STREAMS_CONFIG
-  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"], "configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
+  echo "Creating connection (full refresh | overwrite, stream '${STREAM_NAME}' explicitly selected)..."
+  # nonBreakingSchemaUpdatesBehavior defaults to "ignore" if omitted (see the
+  # partner-connection schema-drift note below for how this bit us on
+  # partner_transactions). Set "propagate_columns" up front here so any
+  # future column added to bank_transactions gets picked up automatically
+  # on its next sync instead of silently dropped.
+  CREATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"sourceId": os.environ["SOURCE_ID"], "destinationId": os.environ["DEST_ID"], "nonBreakingSchemaUpdatesBehavior": "propagate_columns", "configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
   CREATE_CONN_RESPONSE=$(api_post "/connections" "${CREATE_CONN_PAYLOAD}") || exit 1
   CONNECTION_ID=$(echo "$CREATE_CONN_RESPONSE" | python3 -c 'import json, sys; print(json.load(sys.stdin)["connectionId"])')
 else
-  echo "Found existing connection ${CONNECTION_ID}"
-  echo "Ensuring stream '${STREAM_NAME}' is selected (self-heal for connections created before this fix)..."
-  export CONNECTION_ID CONN_STREAMS_CONFIG
-  UPDATE_CONN_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
-  api_patch "/connections/${CONNECTION_ID}" "${UPDATE_CONN_PAYLOAD}" > /dev/null || exit 1
+  echo "Found existing connection ${CONNECTION_ID}; ensuring stream '${STREAM_NAME}' is selected..."
+  # Idempotent repair: an existing connection created before this fix (or by
+  # any other means) may still have an empty stream list, which silently
+  # breaks every sync. Re-assert the correct stream configuration on rerun.
+  UPDATE_CONN_STREAMS_PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"configurations": json.loads(os.environ["CONN_STREAMS_CONFIG"])}))')
+  api_patch "/connections/${CONNECTION_ID}" "${UPDATE_CONN_STREAMS_PAYLOAD}" > /dev/null || exit 1
 fi
 echo "Connection: ${CONNECTION_ID}"
+
+# --- One-time fix: existing partner_transactions connection missed bank_id -
+# Task 1 added a new `bank_id` column to `partner_transactions`. Empirically
+# verified against this Airbyte instance (helm chart / app version 2.1.0):
+#
+#   - Airbyte's public API (api/public/v1) has no endpoint to trigger an
+#     on-demand schema discovery/refresh. That capability
+#     (`sources/discover_schema`) only exists on the deprecated internal
+#     config API (api/v1), which the public API intentionally does not
+#     re-expose (see docs.airbyte.com/developers/api-documentation).
+#   - Airbyte DOES automatically re-discover the source schema immediately
+#     before every sync job, regardless of any settings. What happens with a
+#     detected change is controlled entirely by the connection's
+#     `nonBreakingSchemaUpdatesBehavior` field ("ignore",
+#     "disable_connection", "propagate_columns", "propagate_fully") - and it
+#     defaults to "ignore" if not set at creation time.
+#   - scripts/configure-airbyte-partner-source.sh (Issue 02) never set this
+#     field, so the existing partner-transactions connection defaults to
+#     "ignore": it will keep detecting `bank_id` on every sync and keep
+#     discarding it, forever, without ever surfacing an error.
+#
+# Fix: PATCH the existing connection's nonBreakingSchemaUpdatesBehavior to
+# "propagate_columns" (idempotent - a no-op if already set). Its next sync
+# (manual or scheduled) will then add `bank_id` to the synced Parquet
+# output, since discovery already happens automatically pre-sync.
+echo "Checking existing partner-transactions connection for bank_id schema-drift coverage..."
+PARTNER_SOURCE_NAME="partner-transactions-postgres-source"
+PARTNER_DEST_NAME="minio-bronze-destination"
+export PARTNER_SOURCE_NAME PARTNER_DEST_NAME
+PARTNER_SOURCES_RESPONSE=$(api_get "/sources?workspaceIds=${WORKSPACE_ID}") || exit 1
+PARTNER_SOURCE_ID=$(echo "$PARTNER_SOURCES_RESPONSE" | python3 -c '
+import json, os, sys
+data = json.load(sys.stdin)["data"]
+match = [s["sourceId"] for s in data if s["name"] == os.environ["PARTNER_SOURCE_NAME"]]
+print(match[0] if match else "")
+')
+
+if [ -z "$PARTNER_SOURCE_ID" ]; then
+  echo "  (no existing '${PARTNER_SOURCE_NAME}' source found - skipping, nothing to fix)"
+else
+  export PARTNER_SOURCE_ID
+  PARTNER_DESTINATIONS_RESPONSE=$(api_get "/destinations?workspaceIds=${WORKSPACE_ID}") || exit 1
+  PARTNER_DEST_ID=$(echo "$PARTNER_DESTINATIONS_RESPONSE" | python3 -c '
+import json, os, sys
+data = json.load(sys.stdin)["data"]
+match = [d["destinationId"] for d in data if d["name"] == os.environ["PARTNER_DEST_NAME"]]
+print(match[0] if match else "")
+')
+  export PARTNER_DEST_ID
+  PARTNER_CONNECTIONS_RESPONSE=$(api_get "/connections?workspaceIds=${WORKSPACE_ID}") || exit 1
+  PARTNER_CONNECTION_INFO=$(echo "$PARTNER_CONNECTIONS_RESPONSE" | python3 -c '
+import json, os, sys
+data = json.load(sys.stdin)["data"]
+match = [c for c in data if c["sourceId"] == os.environ["PARTNER_SOURCE_ID"] and c["destinationId"] == os.environ.get("PARTNER_DEST_ID", "")]
+print(json.dumps(match[0]) if match else "")
+')
+  if [ -z "$PARTNER_CONNECTION_INFO" ]; then
+    echo "  (no existing partner-transactions connection found - skipping, nothing to fix)"
+  else
+    PARTNER_CONNECTION_ID=$(echo "$PARTNER_CONNECTION_INFO" | python3 -c 'import json, sys; print(json.load(sys.stdin)["connectionId"])')
+    CURRENT_BEHAVIOR=$(echo "$PARTNER_CONNECTION_INFO" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("nonBreakingSchemaUpdatesBehavior", "ignore"))')
+    if [ "$CURRENT_BEHAVIOR" = "propagate_columns" ] || [ "$CURRENT_BEHAVIOR" = "propagate_fully" ]; then
+      echo "  Partner connection ${PARTNER_CONNECTION_ID} already propagates column changes (${CURRENT_BEHAVIOR}) - bank_id will sync on its next run."
+    else
+      echo "  Partner connection ${PARTNER_CONNECTION_ID} has nonBreakingSchemaUpdatesBehavior='${CURRENT_BEHAVIOR}' (bank_id would be silently dropped forever) - patching to 'propagate_columns'..."
+      api_patch "/connections/${PARTNER_CONNECTION_ID}" '{"nonBreakingSchemaUpdatesBehavior": "propagate_columns"}' > /dev/null || exit 1
+      echo "  Patched. bank_id will be added to the synced schema on the partner connection's next sync (manual or scheduled)."
+    fi
+  fi
+fi
 
 # --- Trigger sync and wait for completion -----------------------------------
 echo "Triggering manual sync..."

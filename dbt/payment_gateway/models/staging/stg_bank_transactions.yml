@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_bank_transactions
+    description: >
+      Bank-side Transaction records, staged from the lake's silver zone.
+      One row per Transaction ID that the Bank has reported (already
+      deduplicated by the bronze-to-silver promotion step). No "initiated"
+      state - the Bank only sees requests submitted for authorization.
+    columns:
+      - name: transaction_id
+        description: Gateway-assigned Transaction ID (CONTEXT.md), shared with stg_partner_transactions.
+      - name: bank_id
+        description: The Bank that processed this transaction.
+      - name: state
+        description: authorized/captured/settled/failed - no "initiated" (Partner-only state).

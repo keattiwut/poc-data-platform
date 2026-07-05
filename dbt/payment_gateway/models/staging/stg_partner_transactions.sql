@@ -3,6 +3,7 @@
 SELECT
     transaction_id,
     partner_id,
+    bank_id,
     amount_cents,
     currency,
     state,
