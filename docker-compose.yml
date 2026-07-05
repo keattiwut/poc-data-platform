@@ -286,7 +286,18 @@ services:
       - "2222:22"
     volumes:
       - sftp-data:/home/${SFTP_USER}/upload
-    command: ${SFTP_USER}:${SFTP_PASSWORD}:1001
+      - ./docker/sftp/fix-upload-perms.sh:/etc/sftp.d/fix-upload-perms.sh
+    environment:
+      SFTP_USER: ${SFTP_USER}
+    # atmoz/sftp requires the chroot home dir to stay root-owned (OpenSSH
+    # ChrootDirectory security requirement). Its auto-chown for the
+    # trailing "dir1,dir2" command arg only fires when that dir doesn't
+    # already exist - but a volume mount always pre-creates its mountpoint
+    # as root:root, so upload/ stays root-owned and the mock generator's
+    # SFTP writes fail with Permission denied (Issue 04 discovery). The
+    # bind-mounted /etc/sftp.d/ script above runs after user creation to
+    # fix ownership explicitly (see docker/sftp/fix-upload-perms.sh).
+    command: ${SFTP_USER}:${SFTP_PASSWORD}:1001:100:upload
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "22"]
       interval: 5s
