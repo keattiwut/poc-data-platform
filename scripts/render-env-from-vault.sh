@@ -56,6 +56,11 @@ CLICKHOUSE_PASSWORD=$(get_field clickhouse password)
 SUPERSET_SECRET_KEY=$(get_field superset secret_key)
 SUPERSET_ADMIN_USER=$(get_field superset admin_user)
 SUPERSET_ADMIN_PASSWORD=$(get_field superset admin_password)
+SFTP_HOST=$(get_field sftp host)
+SFTP_PORT=$(get_field sftp port)
+SFTP_USER=$(get_field sftp user)
+SFTP_PASSWORD=$(get_field sftp password)
+KAFKA_BOOTSTRAP_SERVERS=$(get_field kafka bootstrap_servers)
 
 {
   echo "POSTGRES_USER=${POSTGRES_USER}"
@@ -73,6 +78,11 @@ SUPERSET_ADMIN_PASSWORD=$(get_field superset admin_password)
   echo "SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}"
   echo "SUPERSET_ADMIN_USER=${SUPERSET_ADMIN_USER}"
   echo "SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD}"
+  echo "SFTP_HOST=${SFTP_HOST}"
+  echo "SFTP_PORT=${SFTP_PORT}"
+  echo "SFTP_USER=${SFTP_USER}"
+  echo "SFTP_PASSWORD=${SFTP_PASSWORD}"
+  echo "KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}"
 } > .env
 
 echo "Rendered .env from Vault secrets."

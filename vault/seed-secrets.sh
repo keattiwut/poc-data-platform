@@ -55,4 +55,10 @@ put_secret "clickhouse" \
 put_secret "superset" \
   "\"secret_key\": \"$(openssl rand -base64 42)\", \"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
 
+put_secret "sftp" \
+  "\"host\": \"sftp\", \"port\": \"2222\", \"user\": \"mockuser\", \"password\": \"$(random_password)\""
+
+put_secret "kafka" \
+  "\"bootstrap_servers\": \"kafka:9092\""
+
 echo "Vault secret seeding complete."
