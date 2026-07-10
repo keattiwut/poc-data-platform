@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Vault runs in dev mode (in-memory storage) and must be up and seeded before
-# anything can be rendered from it. Bring it up (and wait for its healthcheck)
-# and seed it here, before rendering .env, rather than assuming ambient state
-# from a previous run — on a clean machine, or after `docker compose down`,
-# Vault would otherwise not exist yet / would have lost all its secrets.
+# Vault runs in server mode with the `file` storage backend (ADR-0023):
+# secrets survive restarts, but Vault always comes back *sealed*. Bring it up,
+# wait for it to respond, init/unseal it (idempotent — first boot initializes
+# and saves the key/token to vault/.vault-keys.json, later boots just unseal),
+# then seed it before rendering .env. A sealed/uninitialized Vault returns
+# non-200 on /v1/sys/health, so the wait loop remaps those states to 200 —
+# it only asserts "Vault is responding", init-unseal handles the rest.
 echo "=== Starting Vault ==="
 docker compose up -d vault
 
-echo "=== Waiting for Vault to become healthy ==="
+echo "=== Waiting for Vault to respond ==="
+VAULT_HEALTH_URL="http://localhost:8200/v1/sys/health?sealedcode=200&uninitcode=200"
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:8200/v1/sys/health > /dev/null 2>&1; then
+  if curl -sf "${VAULT_HEALTH_URL}" > /dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-curl -sf http://localhost:8200/v1/sys/health > /dev/null \
-  || { echo "FAIL: Vault did not become healthy in time" >&2; exit 1; }
+curl -sf "${VAULT_HEALTH_URL}" > /dev/null \
+  || { echo "FAIL: Vault did not come up in time" >&2; exit 1; }
+
+echo "=== Initializing/unsealing Vault (idempotent) ==="
+./vault/init-unseal.sh
 
 echo "=== Seeding Vault secrets (idempotent, skips secrets that already exist) ==="
 ./vault/seed-secrets.sh

@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_ADDR="http://localhost:8200"
-VAULT_TOKEN="poc-dev-root-token"
+VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
+
+# Root token comes from vault/.vault-keys.json, written by vault/init-unseal.sh
+# on first initialization (git-ignored). Overridable via VAULT_TOKEN env var.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KEYS_FILE="${SCRIPT_DIR}/.vault-keys.json"
+if [ -z "${VAULT_TOKEN:-}" ]; then
+  if [ ! -f "${KEYS_FILE}" ]; then
+    echo "ERROR: ${KEYS_FILE} not found — run ./vault/init-unseal.sh first" >&2
+    exit 1
+  fi
+  VAULT_TOKEN=$(jq -r .root_token "${KEYS_FILE}")
+fi
 
 put_secret() {
   local path="$1"

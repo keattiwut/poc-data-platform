@@ -1,5 +1,7 @@
 # Airbyte deployed via abctl (local Kubernetes), amending ADR-0002
 
+**Superseded by [ADR-0024](./0024-dlt-instead-of-airbyte.md)** (2026-07-10): extraction moves to dlt running as Airflow tasks; Airbyte and its kind cluster are retired as part of Issue 04.
+
 Amends [0002](./0002-self-hosted-oss-infrastructure.md). Airbyte OSS no longer supports a plain Docker Compose install — its supported self-hosted deployment path (`abctl`) provisions a local `kind` Kubernetes cluster under the hood. Airbyte specifically runs this way; every other service in the stack (Airflow, MinIO, ClickHouse, Superset, Vault) remains on Docker Compose as ADR-0002 originally specified.
 
 This was chosen over pinning to a legacy pre-abctl Airbyte release (which would mean running an intentionally outdated, unsupported version of a core stack component) and over hand-rolling Airbyte's server/worker/webapp/temporal/db topology in our own Compose file (fighting Airbyte's own deployment tooling instead of using it). The local kind cluster still runs entirely on the same self-hosted, on-prem server — no cloud dependency is introduced, and ADR-0002's actual intent (no cloud, no vendor lock-in, full operational control) is preserved. Only the literal "via Docker Compose" mechanism is amended, and only for Airbyte.
