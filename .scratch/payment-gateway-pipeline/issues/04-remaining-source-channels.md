@@ -22,7 +22,7 @@ As part of this issue, migrate the two existing Airbyte Postgres connections (Pa
 - [x] Mock generator produces a portion of Transactions via a mock Kafka topic, drained on the daily batch schedule (not streamed)
 - [x] All four source channels are extracted by dlt tasks inside `daily_pipeline` (no Airbyte); bronze layout contract preserved
 - [x] Kafka drain has a dedicated smoke test (the thinnest square in the ADR-0024 evidence matrix)
-- [x] Airbyte, abctl, the kind cluster, and all airbyte-* scripts are removed; README updated; no credential lives outside the Vault render *(scripts/docs done; `abctl local uninstall` itself pending maintainer confirmation, see comment)*
+- [x] Airbyte, abctl, the kind cluster, and all airbyte-* scripts are removed; README updated; no credential lives outside the Vault render
 - [x] `fct_transactions` reconciles Transactions regardless of which of the four channel types either side arrived through
 - [x] Dashboard volume/rate numbers reflect Transactions from all four source channels combined
 
@@ -39,4 +39,4 @@ As part of this issue, migrate the two existing Airbyte Postgres connections (Pa
 - Verified end-to-end against the live stack: `daily_pipeline` run green (4 extracts → 2 promotes → dbt build), `verify-kafka-drain.sh` passes (incl. offset-tracking assertion: second drain loads 0), `verify-dlt-bronze.sh` shows both tables arriving via 3 channel datasets each, day-of-run reconciliation rate 0.91 (≈ the designed 10% orphan rate), Superset charts sum (1413) matches `fct_transactions_current`.
 - Fixed en route: seeded SFTP secret was the inconsistent `sftp:2222` host/port hybrid → now in-network `sftp:22` (existing Vault value updated in place); SFTP host port remapped 2222→12222 (2222 fell into a Windows excluded-port range after reboot).
 - Note: the old Jul 4–5 mock batches reconcile at only ~0.17 in `fct` — those generator runs predate the SFTP upload-permission fix, so their SFTP-routed rows never existed. Mock-data artifact, not an extraction bug.
-- **Open:** `abctl local uninstall` (kind cluster teardown) was blocked by the agent-permission gate as a destructive action on a pre-existing resource; needs the maintainer to run/confirm it. Nothing in the repo references Airbyte anymore.
+- ~~**Open:** `abctl local uninstall` (kind cluster teardown) was blocked by the agent-permission gate as a destructive action on a pre-existing resource; needs the maintainer to run/confirm it.~~ **Resolved 2026-07-11:** maintainer confirmed; `abctl local uninstall` run from WSL2 (where abctl lives — it has no native Windows support), then the leftover `airbyte_data`/`airbyte_db`/`airbyte_workspace` Docker volumes removed. No Airbyte containers, volumes, or repo references remain.
