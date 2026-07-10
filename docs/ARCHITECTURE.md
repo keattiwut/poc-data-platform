@@ -12,7 +12,7 @@ This lack of a unified view creates operational blindness: nobody can confidentl
 
 This POC builds a modernized, fully open-source data platform to replace the legacy pipeline. The architecture follows industry-standard patterns (medallion lake zones, dimensional modeling, batch orchestration) and combines purpose-built tools in each layer:
 
-- **Extraction & orchestration**: Airbyte connectors extract data from all four source types; Apache Airflow schedules and orchestrates the daily run
+- **Extraction & orchestration**: dlt pipelines (ADR-0024, replacing Airbyte) extract data from all four source types as ordinary Airflow tasks; Apache Airflow schedules and orchestrates the daily run
 - **Data lake**: Bronze (raw) and silver (cleaned) zones on MinIO (S3-compatible object storage), organized as Parquet files in a medallion structure
 - **Transformation & warehouse**: dbt transforms bronze/silver data into ClickHouse, a columnar OLAP database optimized for dashboard queries
 - **BI & insights**: Apache Superset provides dashboards showing transaction volume (Gross and Net), authorization rate, settlement rate, revenue, Bank/Partner comparisons, and decline-reason breakdowns
@@ -246,7 +246,10 @@ C4Component
 - **Execution in Airflow**: Via dbt-airflow-cosmos adapter (not yet integrated in Issue 01, planned Issue 02+)
 - **Incremental strategy**: Merge with lookback window (ADR-0014), re-scanning 3-7 days of source data to catch late-arriving milestones
 
-#### Airbyte (via `abctl` — local kind K8s cluster)
+#### Airbyte (via `abctl` — local kind K8s cluster) — RETIRED by ADR-0024 / Issue 04
+
+> Extraction now runs as dlt tasks inside the `daily_pipeline` DAG (`scripts/extract-to-bronze.py`); the kind cluster and all airbyte-* scripts were removed, and extraction credentials come from the Vault render like every other service. The subsection below is retained as historical Issue-01 context.
+
 - **Status in Issue 01**: Infrastructure provisioned via `scripts/install-airbyte.sh`; no connectors configured yet
 - **Deployment model** (ADR-0020): Runs in its own local `kind` Kubernetes cluster, not Docker Compose like other services
 - **Connectors to be built in Issues 02+**:
