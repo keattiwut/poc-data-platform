@@ -7,14 +7,12 @@
 }}
 
 -- Fee-at-capture computation on top of the Bank/Partner reconciliation
--- (ADR-0012, Issue 03). The actual FULL OUTER JOIN lives in
--- int_reconciled_transactions.sql, not here - see that model's header
--- comment for why: combining the FULL OUTER JOIN and this fee LEFT JOIN in
--- a single INSERT-with-explicit-column-list statement (which is what
--- dbt-clickhouse's `table` materialization always issues) hit a real
--- ClickHouse 24.10.4 bug that silently NULLed out an unpredictable subset of
--- columns. Reading the already-materialized int_reconciled_transactions
--- table here avoids it entirely (verified against the running instance).
+-- (ADR-0012, Issue 03). The FULL OUTER JOIN lives in
+-- int_reconciled_transactions.sql, not here — originally forced by a
+-- ClickHouse 24.10.4 s3()-view join bug (fixed on 26.3, see ADR-0022 and
+-- that model's header), kept as a split because reconciliation and fee
+-- application are separate concerns and the physical intermediate keeps
+-- this model a simple single LEFT JOIN.
 --
 -- Also verified against the running instance: `fee_schedule` (a dbt seed)
 -- loads its numeric columns as non-Nullable Int32 (see `DESCRIBE TABLE

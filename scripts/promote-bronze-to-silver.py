@@ -8,7 +8,9 @@ import sys
 
 import duckdb
 
-MINIO_ENDPOINT = "localhost:9000"
+# Overridable so the same script works host-side (localhost:9000) and inside
+# a container on the compose network (minio:9000).
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
 
 
 def promote(table: str) -> None:

@@ -2,12 +2,24 @@
 set -euo pipefail
 
 VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
-VAULT_TOKEN="${VAULT_TOKEN:-poc-dev-root-token}"
 
-# Fail loudly up front if Vault isn't reachable, rather than letting every
-# get_field call below fail silently and render a .env full of empty values.
+# Root token comes from vault/.vault-keys.json, written by vault/init-unseal.sh
+# on first initialization (git-ignored). Overridable via VAULT_TOKEN env var.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KEYS_FILE="${SCRIPT_DIR}/../vault/.vault-keys.json"
+if [ -z "${VAULT_TOKEN:-}" ]; then
+  if [ ! -f "${KEYS_FILE}" ]; then
+    echo "ERROR: ${KEYS_FILE} not found — run ./vault/init-unseal.sh first" >&2
+    exit 1
+  fi
+  VAULT_TOKEN=$(jq -r .root_token "${KEYS_FILE}")
+fi
+
+# Fail loudly up front if Vault isn't reachable or still sealed, rather than
+# letting every get_field call below fail silently and render a .env full of
+# empty values. /v1/sys/health returns non-200 while sealed/uninitialized.
 curl -sf "${VAULT_ADDR}/v1/sys/health" > /dev/null \
-  || { echo "ERROR: Vault unreachable at ${VAULT_ADDR}" >&2; exit 1; }
+  || { echo "ERROR: Vault unreachable or sealed at ${VAULT_ADDR} — run ./vault/init-unseal.sh" >&2; exit 1; }
 
 get_field() {
   local path="$1"

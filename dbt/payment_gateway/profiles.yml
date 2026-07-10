@@ -4,8 +4,11 @@ payment_gateway:
     dev:
       type: clickhouse
       schema: default
-      host: localhost
-      port: 8124
+      # Defaults are the host-side mapping (see docker-compose.yml port
+      # remap comment); Airflow tasks override with the in-network address
+      # (clickhouse:8123) via these env vars set on the scheduler service.
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT', '8124') | as_number }}"
       user: "{{ env_var('CLICKHOUSE_USER') }}"
       password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
       secure: false

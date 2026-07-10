@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .env
+vault/.vault-keys.json
 .venv/
 venv/
 node_modules/

@@ -8,25 +8,25 @@ Vault must start and be seeded **before** any other service, because every other
 
 ```bash
 docker compose up -d vault
+./vault/init-unseal.sh
 ./vault/seed-secrets.sh
 ./scripts/render-env-from-vault.sh
 docker compose up -d
 ```
 
-Or, simpler: just run `./scripts/verify-full-stack.sh`, which now does exactly this (start Vault, wait for its healthcheck, seed it, render `.env`, then bring up the rest of the stack) before running per-service verification.
+Or, simpler: just run `./scripts/verify-full-stack.sh`, which now does exactly this (start Vault, wait for it to respond, init/unseal it, seed it, render `.env`, then bring up the rest of the stack) before running per-service verification.
 
-## Vault dev-mode restart hazard
+## Vault restarts and unsealing
 
-Vault runs in **dev mode** for this POC (`VAULT_DEV_ROOT_TOKEN_ID` in `docker-compose.yml`), which means **in-memory storage only** — all secrets are lost if the Vault container restarts.
+Vault runs in **server mode** with the `file` storage backend on the `vault-data` volume ([ADR-0023](docs/adr/0023-vault-file-storage-backend.md)), so **secrets survive container restarts** — the old dev-mode "restart wipes everything, recover with `docker compose down -v`" hazard is gone.
 
-`vault/seed-secrets.sh` is idempotent (it skips any secret path that already exists), which is normally what you want. But if Vault's storage was wiped by a restart, the seeder can't tell the difference between "never seeded" and "storage just got wiped" — it will happily generate **new random passwords** for everything. Those new passwords will not match what's already baked into the Postgres/MinIO/ClickHouse data volumes from their *original* initialization, and every service will start rejecting the new credentials.
-
-**If Vault ever restarts unexpectedly, do not just re-seed.** The fix is:
+The trade-off: after any restart, Vault comes back **sealed**. Recovery is just:
 
 ```bash
-docker compose down -v   # wipes all data volumes, including the stale credentials
-./scripts/verify-full-stack.sh   # fresh bring-up: new Vault secrets + freshly-initialized volumes that match them
+./vault/init-unseal.sh
 ```
+
+On first boot this initializes Vault and writes the unseal key + root token to `vault/.vault-keys.json` (git-ignored — never commit it; if you lose it, Vault's storage is unrecoverable). On every later boot it only unseals. All scripts that talk to Vault read the root token from that file.
 
 ## Credential sourcing model
 
