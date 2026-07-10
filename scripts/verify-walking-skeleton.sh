@@ -5,22 +5,30 @@ echo "=== Rendering fresh .env from Vault ==="
 ./scripts/render-env-from-vault.sh
 set -a; source .env; set +a
 
-echo "=== Seeding mock Partner + Bank transactions ==="
-# NOTE (see .superpowers/sdd/task-1-report.md): .env's POSTGRES_HOST is
-# "postgres" - the Docker Compose service name, resolvable only *inside* the
-# Docker network. This script runs on the host, so we override POSTGRES_HOST
-# to the mapped host port for this one invocation only; .env itself is left
-# untouched so in-network consumers (Airbyte's source config, etc.) still
-# get "postgres".
-POSTGRES_HOST=localhost python3 mock/generate_transactions.py
+echo "=== Seeding mock Partner + Bank transactions (all four channels) ==="
+# NOTE (see .superpowers/sdd/task-1-report.md): .env's POSTGRES_HOST /
+# SFTP_HOST:PORT / KAFKA_BOOTSTRAP_SERVERS are Docker Compose in-network
+# addresses, resolvable only *inside* the Docker network. This script runs on
+# the host, so we override them to the host-mapped addresses for this one
+# invocation only; .env itself is left untouched so in-network consumers (the
+# dlt extraction tasks on the Airflow scheduler) still get the service names.
+POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222 \
+  KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
+  python3 mock/generate_transactions.py
 ./scripts/verify-mock-generator.sh
 ./scripts/verify-bank-transactions-generated.sh
+./scripts/verify-sftp-kafka-generated.sh
 
-echo "=== Syncing Airbyte Postgres -> MinIO bronze (Partner + Bank) ==="
-./scripts/configure-airbyte-partner-source.sh
-./scripts/verify-airbyte-bronze-sync.sh
-./scripts/configure-airbyte-bank-source.sh
-./scripts/verify-airbyte-bank-bronze-sync.sh
+echo "=== Extracting all four source channels via dlt -> MinIO bronze (ADR-0024) ==="
+# Runs inside the airflow-scheduler container - the same environment (deps +
+# in-network endpoints) the daily_pipeline DAG tasks use. MSYS_NO_PATHCONV
+# stops Git Bash mangling the in-container /opt/... path into a Windows
+# path; harmless no-op elsewhere.
+for channel in partner_db bank_db sftp kafka; do
+  MSYS_NO_PATHCONV=1 docker compose exec -T airflow-scheduler \
+    python /opt/airflow/scripts/extract-to-bronze.py "$channel"
+done
+./scripts/verify-dlt-bronze.sh
 
 echo "=== Promoting bronze -> silver (Partner + Bank) ==="
 python3 scripts/promote-bronze-to-silver.py partner_transactions
@@ -38,4 +46,4 @@ echo "=== Verifying Superset charts ==="
 ./scripts/verify-superset-chart.sh
 
 echo ""
-echo "=== BANK RECONCILIATION COMPLETE: generator (partner+bank) -> Airbyte (2 sources) -> lake -> dbt (reconciliation + fees) -> ClickHouse -> Superset (4 charts) ==="
+echo "=== BANK RECONCILIATION COMPLETE: generator (partner+bank, 4 channels) -> dlt (postgres+sftp+kafka) -> lake -> dbt (reconciliation + fees) -> ClickHouse -> Superset (4 charts) ==="

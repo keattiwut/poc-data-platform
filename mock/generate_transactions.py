@@ -245,7 +245,8 @@ def main() -> None:
     # correct for container-to-container traffic but unreachable from the
     # host. Running this script directly on the host: override at
     # invocation time, e.g.
-    # POSTGRES_HOST=localhost SFTP_HOST=localhost KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
+    # POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222 \
+    #   KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
     #   python3 mock/generate_transactions.py
     conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],

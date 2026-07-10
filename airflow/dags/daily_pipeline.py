@@ -1,9 +1,15 @@
 """Daily pipeline DAG (Issue 11 / ADR-0021): the first real DAG, replacing the
 manual shell-script run that verify-walking-skeleton.sh exercises.
 
-    promote partner_transactions ─┐
-                                  ├─> dbt build
-    promote bank_transactions   ──┘
+    extract partner_db ──┐
+    extract bank_db    ──┤   promote partner_transactions ─┐
+    extract sftp       ──┼─> ├─> dbt build
+    extract kafka      ──┘   promote bank_transactions   ──┘
+
+Extraction (Issue 04 / ADR-0024) is dlt running in-process as ordinary tasks
+(scripts/extract-to-bronze.py), one per source channel, replacing the Airbyte
+platform. The SFTP and Kafka channels each carry rows for *both* logical
+tables, so every promotion depends on every extraction.
 
 Written against Airflow 3 APIs: `airflow.sdk` for the @dag decorator and the
 standard provider's BashOperator (both bundled in apache/airflow:3.3.0).
@@ -26,6 +32,7 @@ sets them to the in-network clickhouse:8123 so this DAG's dbt task connects.
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag
 
+EXTRACT = "python /opt/airflow/scripts/extract-to-bronze.py"
 PROMOTE = "python /opt/airflow/scripts/promote-bronze-to-silver.py"
 DBT_DIR = "/opt/airflow/dbt/payment_gateway"
 
@@ -41,6 +48,14 @@ DBT_DIR = "/opt/airflow/dbt/payment_gateway"
     tags=["payment-gateway"],
 )
 def daily_pipeline():
+    # One dlt extraction task per source channel (ADR-0024). Kafka is drained
+    # as a batch here on the daily schedule, not consumed continuously
+    # (ADR-0001).
+    extracts = [
+        BashOperator(task_id=f"extract_{channel}", bash_command=f"{EXTRACT} {channel}")
+        for channel in ("partner_db", "bank_db", "sftp", "kafka")
+    ]
+
     promote_partner = BashOperator(
         task_id="promote_partner_transactions",
         bash_command=f"{PROMOTE} partner_transactions",
@@ -59,7 +74,11 @@ def daily_pipeline():
         bash_command=f"cd {DBT_DIR} && DBT_PROFILES_DIR=. dbt build",
     )
 
-    # Promotions are independent tables -> run in parallel, then transform.
+    # SFTP/Kafka extractions feed both tables, so both promotions wait for
+    # all four channels; promotions are independent tables -> run in
+    # parallel, then transform.
+    extracts >> promote_partner
+    extracts >> promote_bank
     [promote_partner, promote_bank] >> dbt_build
 
 

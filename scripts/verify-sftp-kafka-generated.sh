@@ -2,12 +2,13 @@
 set -euo pipefail
 set -a; source .env; set +a
 
-# .env stores SFTP_HOST="sftp" and KAFKA_BOOTSTRAP_SERVERS="kafka:9092" - the
-# Docker Compose service name/port, resolvable only *inside* the Compose
+# .env stores SFTP_HOST="sftp":22 and KAFKA_BOOTSTRAP_SERVERS="kafka:9092" -
+# the Docker Compose service name/port, resolvable only *inside* the Compose
 # network. This script runs on the host, so override to the host-mapped
-# address for this one invocation only (same pattern as
+# address/port for this one invocation only (same pattern as
 # scripts/verify-sftp-kafka-infra.sh); .env itself is left untouched.
 SFTP_HOST=localhost
+SFTP_PORT=12222
 KAFKA_BOOTSTRAP_SERVERS="localhost:9094"
 
 echo "Checking SFTP upload/ has partner and bank CSV files..."

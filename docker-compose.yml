@@ -152,15 +152,27 @@ services:
       # Airflow 3: tasks call back to the api-server's execution API.
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080/execution/
       # POC-only: install the deps the daily_pipeline DAG's tasks need
-      # (duckdb for bronze->silver promotion, dbt for the build step) at
-      # container start. Slows startup; a custom image is the non-POC fix.
-      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-duckdb dbt-core dbt-clickhouse}
+      # (duckdb for bronze->silver promotion, dbt for the build step, dlt +
+      # per-source extras for the ADR-0024 extraction tasks) at container
+      # start. Slows startup; a custom image is the non-POC fix.
+      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-duckdb dbt-core dbt-clickhouse dlt[sql_database,filesystem,sftp] pyarrow psycopg2-binary confluent-kafka}
       # Runtime env for the DAG's tasks (in-network endpoints, not host ones).
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      # Source credentials for the dlt extraction tasks (Issue 04): the mock
+      # Postgres, SFTP server, and Kafka broker, all from the Vault render.
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SFTP_HOST: ${SFTP_HOST}
+      SFTP_PORT: ${SFTP_PORT}
+      SFTP_USER: ${SFTP_USER}
+      SFTP_PASSWORD: ${SFTP_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       # In-network ClickHouse address for dbt (profiles.yml defaults to the
       # host-side localhost:8124 mapping otherwise).
       CLICKHOUSE_HOST: clickhouse
@@ -283,7 +295,7 @@ services:
     image: atmoz/sftp:alpine
     container_name: sftp
     ports:
-      - "2222:22"
+      - "12222:22"
     volumes:
       - sftp-data:/home/${SFTP_USER}/upload
       - ./docker/sftp/fix-upload-perms.sh:/etc/sftp.d/fix-upload-perms.sh
