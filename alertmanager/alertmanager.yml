@@ -1,0 +1,33 @@
+# Alertmanager routing (Issue 08): two Microsoft Teams channels by severity,
+# per CONTEXT.md's Critical/Warning definitions. Uses Alertmanager's native
+# msteams integration; the webhook URLs point at the mock-teams receiver in
+# this POC (it speaks the Teams incoming-webhook contract, including the
+# "1" response body). For production: replace the two webhook_url values
+# with real Teams incoming-webhook URLs - those ARE secrets and must then
+# move into the Vault render.
+route:
+  group_by: ["alertname"]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  receiver: teams-warning
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: teams-critical
+    - matchers: ['severity="warning"']
+      receiver: teams-warning
+
+receivers:
+  - name: teams-critical
+    msteams_configs:
+      - webhook_url: http://mock-teams:8080/critical
+        send_resolved: true
+        title: '{{ .CommonAnnotations.summary }}'
+        text: 'Runbook: {{ .CommonAnnotations.runbook }}'
+
+  - name: teams-warning
+    msteams_configs:
+      - webhook_url: http://mock-teams:8080/warning
+        send_resolved: true
+        title: '{{ .CommonAnnotations.summary }}'
+        text: 'Runbook: {{ .CommonAnnotations.runbook }}'

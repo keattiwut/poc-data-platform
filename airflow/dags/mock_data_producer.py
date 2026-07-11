@@ -17,6 +17,8 @@ stop mock data once real Bank/Partner access exists.
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag
 
+from alerting import notify_warning
+
 GENERATE = "python /opt/airflow/mock/generate_transactions.py"
 
 
@@ -26,6 +28,8 @@ GENERATE = "python /opt/airflow/mock/generate_transactions.py"
     catchup=False,
     max_active_runs=1,
     tags=["payment-gateway", "mock"],
+    # Mock tooling, not the business pipeline -> Warning channel (Issue 08).
+    default_args={"on_failure_callback": notify_warning},
 )
 def mock_data_producer():
     BashOperator(

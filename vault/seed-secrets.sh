@@ -66,4 +66,7 @@ put_secret "sftp" \
 put_secret "kafka" \
   "\"bootstrap_servers\": \"kafka:9092\""
 
+put_secret "grafana" \
+  "\"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
+
 echo "Vault secret seeding complete."
