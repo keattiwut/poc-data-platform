@@ -10,7 +10,7 @@ set -a; source .env; set +a
 # this one invocation only; .env itself is left untouched.
 SFTP_HOST=localhost
 SFTP_PORT=12222
-KAFKA_BOOTSTRAP_SERVERS="localhost:9094"
+KAFKA_BOOTSTRAP_SERVERS="127.0.0.1:9094"
 
 echo "Checking SFTP server is reachable and accepts login..."
 python3 -c "

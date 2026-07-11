@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
 # Vault runs in server mode with the `file` storage backend (ADR-0023):
 # secrets survive restarts, but Vault always comes back *sealed*. Bring it up,
 # wait for it to respond, init/unseal it (idempotent — first boot initializes
@@ -8,18 +15,21 @@ set -euo pipefail
 # then seed it before rendering .env. A sealed/uninitialized Vault returns
 # non-200 on /v1/sys/health, so the wait loop remaps those states to 200 —
 # it only asserts "Vault is responding", init-unseal handles the rest.
+echo "=== Generating TLS material (idempotent) ==="
+./scripts/generate-tls-certs.sh
+
 echo "=== Starting Vault ==="
 docker compose up -d vault
 
 echo "=== Waiting for Vault to respond ==="
-VAULT_HEALTH_URL="http://localhost:8200/v1/sys/health?sealedcode=200&uninitcode=200"
+VAULT_HEALTH_URL="https://localhost:8200/v1/sys/health?sealedcode=200&uninitcode=200"
 for i in $(seq 1 30); do
-  if curl -sf "${VAULT_HEALTH_URL}" > /dev/null 2>&1; then
+  if curl --cacert tls/ca.crt -sf "${VAULT_HEALTH_URL}" > /dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-curl -sf "${VAULT_HEALTH_URL}" > /dev/null \
+curl --cacert tls/ca.crt -sf "${VAULT_HEALTH_URL}" > /dev/null \
   || { echo "FAIL: Vault did not come up in time" >&2; exit 1; }
 
 echo "=== Initializing/unsealing Vault (idempotent) ==="

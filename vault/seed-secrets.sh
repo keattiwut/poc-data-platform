@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
+VAULT_ADDR="${VAULT_ADDR:-https://localhost:8200}"
+# Vault serves TLS from the local internal CA (Issue 09 / ADR-0017);
+# clients verify against it rather than passing -k.
+VAULT_CACERT="${VAULT_CACERT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tls/ca.crt}"
 
 # Root token comes from vault/.vault-keys.json, written by vault/init-unseal.sh
 # on first initialization (git-ignored). Overridable via VAULT_TOKEN env var.
@@ -19,7 +29,7 @@ put_secret() {
   local path="$1"
   shift
   local http_code
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  http_code=$(curl --cacert "${VAULT_CACERT}" -s -o /dev/null -w "%{http_code}" -H "X-Vault-Token: ${VAULT_TOKEN}" \
     "${VAULT_ADDR}/v1/secret/data/${path}")
   if [ "$http_code" = "200" ]; then
     echo "secret/${path} already exists, skipping (idempotent)"
@@ -28,7 +38,7 @@ put_secret() {
     echo "ERROR: unexpected response checking secret/${path} (HTTP ${http_code}) — refusing to write, could indicate an auth or connectivity problem" >&2
     exit 1
   fi
-  curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  curl --cacert "${VAULT_CACERT}" -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
     -H "Content-Type: application/json" \
     -X POST \
     -d "{\"data\": {$*}}" \
@@ -68,5 +78,16 @@ put_secret "kafka" \
 
 put_secret "grafana" \
   "\"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
+
+# Issue 09 (ADR-0017 / review finding 7): per-service least-privilege MinIO
+# users - root stays admin-only. Created in MinIO by
+# docker/minio/setup-service-users.sh at bring-up.
+put_secret "minio-services" \
+  "\"extraction_user\": \"svc_extraction\", \"extraction_password\": \"$(random_password)\", \"promotion_user\": \"svc_promotion\", \"promotion_password\": \"$(random_password)\", \"warehouse_user\": \"svc_warehouse\", \"warehouse_password\": \"$(random_password)\""
+
+# Encryption-at-rest keys (ADR-0017): MinIO's built-in single-key KMS
+# ("name:base64(32B)") and ClickHouse's encrypted-disk key (hex, 32B).
+put_secret "encryption" \
+  "\"minio_kms_secret_key\": \"pipeline-sse-key:$(openssl rand -base64 32)\", \"clickhouse_disk_key_hex\": \"$(openssl rand -hex 32)\""
 
 echo "Vault secret seeding complete."

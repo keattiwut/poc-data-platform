@@ -1,0 +1,21 @@
+<!-- TLS (Issue 09 / ADR-0017): HTTPS interface for dbt/Superset/verify
+     clients, and CA trust for ClickHouse's own outbound s3() calls to the
+     TLS-enabled MinIO. The plain 8123 port stays enabled for the container
+     healthcheck and same-host loopback only; it is not published beyond the
+     compose network and the host loopback. -->
+<clickhouse>
+    <https_port>8443</https_port>
+    <openSSL>
+        <server>
+            <certificateFile>/etc/clickhouse-server/tls/clickhouse.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-server/tls/clickhouse.key</privateKeyFile>
+        </server>
+        <client>
+            <caConfig>/etc/clickhouse-server/tls/ca.crt</caConfig>
+            <verificationMode>relaxed</verificationMode>
+            <invalidCertificateHandler>
+                <name>RejectCertificateHandler</name>
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+</clickhouse>

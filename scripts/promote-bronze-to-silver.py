@@ -43,11 +43,15 @@ def promote(table: str) -> None:
     skip_dedup = os.environ.get("PROMOTE_SKIP_DEDUP") == "1"
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
+    # MinIO serves TLS from the local internal CA (Issue 09); point duckdb's
+    # cert verification at it (same bundle the python S3 clients use).
+    ca_bundle = os.environ.get("AWS_CA_BUNDLE", "tls/ca.crt")
+    con.execute(f"SET ca_cert_file='{ca_bundle}'; SET enable_server_cert_verification=true;")
     con.execute(f"""
         SET s3_endpoint='{MINIO_ENDPOINT}';
-        SET s3_access_key_id='{os.environ["MINIO_ROOT_USER"]}';
-        SET s3_secret_access_key='{os.environ["MINIO_ROOT_PASSWORD"]}';
-        SET s3_use_ssl=false;
+        SET s3_access_key_id='{os.environ["MINIO_PROMOTION_USER"]}';
+        SET s3_secret_access_key='{os.environ["MINIO_PROMOTION_PASSWORD"]}';
+        SET s3_use_ssl=true;
         SET s3_url_style='path';
     """)
 

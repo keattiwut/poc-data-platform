@@ -15,10 +15,12 @@ models:
           # 05) if the bronze->silver dedup that normally absorbs it ever
           # regresses - demonstrated live by scripts/verify-dq-tests.sh.
           - unique
+          - no_pan_like_values
       - name: partner_id
         description: The Partner that originated this transaction.
         data_tests:
           - not_null
+          - no_pan_like_values
       - name: bank_id
         description: >
           The Bank this transaction was routed to. The mock gateway knows

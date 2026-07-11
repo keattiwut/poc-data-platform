@@ -1,8 +1,10 @@
 <clickhouse>
     <named_collections>
+        <!-- Issue 09: least-privilege service user (read-only silver/), not
+             the MinIO root credential - root is admin-only now. -->
         <minio_s3>
-            <access_key_id from_env="MINIO_ROOT_USER"/>
-            <secret_access_key from_env="MINIO_ROOT_PASSWORD"/>
+            <access_key_id from_env="MINIO_WAREHOUSE_USER"/>
+            <secret_access_key from_env="MINIO_WAREHOUSE_PASSWORD"/>
         </minio_s3>
     </named_collections>
 </clickhouse>

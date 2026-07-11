@@ -99,7 +99,7 @@ def wipe_lake() -> None:
         key=os.environ["MINIO_ROOT_USER"],
         secret=os.environ["MINIO_ROOT_PASSWORD"],
         client_kwargs={
-            "endpoint_url": f"http://{os.environ.get('MINIO_ENDPOINT', 'localhost:9000')}"
+            "endpoint_url": f"{os.environ.get('MINIO_SCHEME', 'https')}://{os.environ.get('MINIO_ENDPOINT', 'localhost:9000')}"
         },
     )
     for zone in ("data-lake/bronze", "data-lake/silver"):

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
 # Standalone repro for the ClickHouse s3()-view join bug (ADR-0022, Issue 12).
 #
 # On clickhouse-server 24.10.4, joining the s3()-backed staging views
@@ -50,7 +57,7 @@ printf 'machine localhost login %s password %s\n' "$CLICKHOUSE_USER" "$CLICKHOUS
 
 # Host-side port is 8124, not 8123 - see docker-compose.yml's clickhouse
 # service ports mapping (8123 is taken by a local socksproxy.exe service).
-CH_URL="http://localhost:8124/"
+CH_URL=--cacert tls/ca.crt "https://localhost:8124/"
 
 run_sql() {
   curl -sf --netrc-file "$CH_NETRC" "$CH_URL" --data-binary @-

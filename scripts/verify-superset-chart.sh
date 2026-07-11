@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
 set -a; source .env; set +a
 
 echo "Checking a chart named 'Transaction Volume by Day' exists in Superset..."
@@ -84,7 +91,7 @@ trap 'rm -f "$CH_NETRC"' EXIT
 chmod 600 "$CH_NETRC"
 printf 'machine localhost login %s password %s\n' "$CLICKHOUSE_USER" "$CLICKHOUSE_PASSWORD" > "$CH_NETRC"
 
-CLICKHOUSE_TOTAL=$(curl -sf --netrc-file "$CH_NETRC" "http://localhost:8124/" --data-binary @- <<'EOSQL'
+CLICKHOUSE_TOTAL=$(curl -sf --netrc-file "$CH_NETRC" --cacert tls/ca.crt "https://localhost:8124/" --data-binary @- <<'EOSQL'
 SELECT count(*) FROM fct_transactions_current
 EOSQL
 )

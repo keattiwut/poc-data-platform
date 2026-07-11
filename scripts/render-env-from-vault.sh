@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
+VAULT_ADDR="${VAULT_ADDR:-https://localhost:8200}"
+# Vault serves TLS from the local internal CA (Issue 09 / ADR-0017);
+# clients verify against it rather than passing -k.
+VAULT_CACERT="${VAULT_CACERT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tls/ca.crt}"
 
 # Root token comes from vault/.vault-keys.json, written by vault/init-unseal.sh
 # on first initialization (git-ignored). Overridable via VAULT_TOKEN env var.
@@ -18,14 +28,14 @@ fi
 # Fail loudly up front if Vault isn't reachable or still sealed, rather than
 # letting every get_field call below fail silently and render a .env full of
 # empty values. /v1/sys/health returns non-200 while sealed/uninitialized.
-curl -sf "${VAULT_ADDR}/v1/sys/health" > /dev/null \
+curl --cacert "${VAULT_CACERT}" -sf "${VAULT_ADDR}/v1/sys/health" > /dev/null \
   || { echo "ERROR: Vault unreachable or sealed at ${VAULT_ADDR} — run ./vault/init-unseal.sh" >&2; exit 1; }
 
 get_field() {
   local path="$1"
   local field="$2"
   local value
-  value=$(curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  value=$(curl --cacert "${VAULT_CACERT}" -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
     "${VAULT_ADDR}/v1/secret/data/${path}" \
     | jq -r ".data.data.${field}")
   if [ -z "${value}" ] || [ "${value}" = "null" ]; then
@@ -63,6 +73,14 @@ SFTP_PASSWORD=$(get_field sftp password)
 KAFKA_BOOTSTRAP_SERVERS=$(get_field kafka bootstrap_servers)
 GRAFANA_ADMIN_USER=$(get_field grafana admin_user)
 GRAFANA_ADMIN_PASSWORD=$(get_field grafana admin_password)
+MINIO_EXTRACTION_USER=$(get_field minio-services extraction_user)
+MINIO_EXTRACTION_PASSWORD=$(get_field minio-services extraction_password)
+MINIO_PROMOTION_USER=$(get_field minio-services promotion_user)
+MINIO_PROMOTION_PASSWORD=$(get_field minio-services promotion_password)
+MINIO_WAREHOUSE_USER=$(get_field minio-services warehouse_user)
+MINIO_WAREHOUSE_PASSWORD=$(get_field minio-services warehouse_password)
+MINIO_KMS_SECRET_KEY=$(get_field encryption minio_kms_secret_key)
+CLICKHOUSE_DISK_KEY_HEX=$(get_field encryption clickhouse_disk_key_hex)
 
 {
   echo "POSTGRES_USER=${POSTGRES_USER}"
@@ -87,6 +105,14 @@ GRAFANA_ADMIN_PASSWORD=$(get_field grafana admin_password)
   echo "KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}"
   echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}"
   echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}"
+  echo "MINIO_EXTRACTION_USER=${MINIO_EXTRACTION_USER}"
+  echo "MINIO_EXTRACTION_PASSWORD=${MINIO_EXTRACTION_PASSWORD}"
+  echo "MINIO_PROMOTION_USER=${MINIO_PROMOTION_USER}"
+  echo "MINIO_PROMOTION_PASSWORD=${MINIO_PROMOTION_PASSWORD}"
+  echo "MINIO_WAREHOUSE_USER=${MINIO_WAREHOUSE_USER}"
+  echo "MINIO_WAREHOUSE_PASSWORD=${MINIO_WAREHOUSE_PASSWORD}"
+  echo "MINIO_KMS_SECRET_KEY=${MINIO_KMS_SECRET_KEY}"
+  echo "CLICKHOUSE_DISK_KEY_HEX=${CLICKHOUSE_DISK_KEY_HEX}"
 } > .env
 
 echo "Rendered .env from Vault secrets."

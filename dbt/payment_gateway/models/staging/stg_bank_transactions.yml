@@ -13,10 +13,12 @@ models:
         data_tests:
           - not_null
           - unique
+          - no_pan_like_values
       - name: bank_id
         description: The Bank that processed this transaction.
         data_tests:
           - not_null
+          - no_pan_like_values
       - name: state
         description: authorized/captured/settled/failed/refunded - no "initiated" (Partner-only state).
         data_tests:

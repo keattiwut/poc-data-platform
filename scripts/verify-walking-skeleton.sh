@@ -13,7 +13,7 @@ echo "=== Seeding mock Partner + Bank transactions (all four channels) ==="
 # invocation only; .env itself is left untouched so in-network consumers (the
 # dlt extraction tasks on the Airflow scheduler) still get the service names.
 POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222 \
-  KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
+  KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9094 \
   python3 mock/generate_transactions.py
 ./scripts/verify-mock-generator.sh
 ./scripts/verify-bank-transactions-generated.sh
