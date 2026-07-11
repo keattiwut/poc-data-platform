@@ -4,7 +4,7 @@ set -a; source .env; set +a
 
 echo "Checking a chart named 'Transaction Volume by Day' exists in Superset..."
 # Superset's REST API requires a login (access token) + CSRF token first; see
-# scripts/configure-superset-clickhouse.sh for the auth flow this reuses.
+# scripts/configure-superset-dashboard.py for the auth flow this reuses.
 source scripts/superset-auth.sh  # expected to export SUPERSET_ACCESS_TOKEN
 
 # --- Reusable chart existence + data check --------------------------------
@@ -99,4 +99,22 @@ check_chart_has_data "Authorization Rate"
 check_chart_has_data "Settlement Rate"
 check_chart_has_data "Gross Revenue"
 
-echo "PASS: all four charts exist and return real data"
+# --- Issue 06: the full four-pillar dashboard on the conformed mart. Each
+# chart must return real rows AND render within the 1-3s acceptance budget
+# (measured as fresh, cache-bypassed data-endpoint latency). ------------------
+RENDER_BUDGET_SECONDS=3
+for chart_name in \
+  "Gross Volume (USD)" "Net Volume (USD)" "Weekly Gross vs Net Volume" \
+  "Net Revenue" "Volume by Bank" "Volume by Partner" \
+  "Decline Reasons by Bank" "Decline Reasons by Partner"; do
+  START_NS=$(date +%s%N)
+  check_chart_has_data "$chart_name"
+  ELAPSED_MS=$(( ($(date +%s%N) - START_NS) / 1000000 ))
+  if [ "$ELAPSED_MS" -gt $((RENDER_BUDGET_SECONDS * 1000)) ]; then
+    echo "FAIL: chart '${chart_name}' took ${ELAPSED_MS}ms (> ${RENDER_BUDGET_SECONDS}s render budget)"
+    exit 1
+  fi
+  echo "PASS: chart '${chart_name}' answered in ${ELAPSED_MS}ms"
+done
+
+echo "PASS: all dashboard charts exist, return real data, and answer within ${RENDER_BUDGET_SECONDS}s"
