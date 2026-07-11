@@ -83,6 +83,8 @@ services:
       - ./tls/minio.crt:/root/.minio/certs/public.crt:ro
       - ./tls/minio.key:/root/.minio/certs/private.key:ro
       - ./tls/ca.crt:/root/.mc/certs/CAs/pipeline-ca.crt:ro
+      # mc mirror target for the daily lake backup (Issue 10 / ADR-0018).
+      - ./backups/minio:/backups
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "--cacert", "/root/.minio/certs/public.crt", "https://localhost:9000/minio/health/live"]
@@ -301,6 +303,9 @@ services:
       - ./clickhouse/config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
       # At-rest encryption for MergeTree data (Issue 09 / ADR-0017).
       - ./clickhouse/config/storage-encryption.xml:/etc/clickhouse-server/config.d/storage-encryption.xml:ro
+      # Native backup target (Issue 10 / ADR-0018).
+      - ./clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
+      - ./backups/clickhouse:/backups
       # TLS: https interface + CA trust for outbound s3() to MinIO.
       - ./clickhouse/config/tls.xml:/etc/clickhouse-server/config.d/tls.xml:ro
       - ./tls/clickhouse.crt:/etc/clickhouse-server/tls/clickhouse.crt:ro
@@ -486,6 +491,23 @@ services:
   # tenant, so Alertmanager and the Airflow failure callbacks post here
   # (same contract; production swaps the webhook URLs for real ones). The
   # URLs aren't credentials, hence not in the Vault render.
+  # Daily backup scheduler (Issue 10 / ADR-0018): busybox crond running
+  # scripts/backup-all.sh at 03:00 against the sibling containers via the
+  # docker socket (same trust model as promtail's log collection). Backups
+  # land in ./backups - the POC stand-in for the off-host target.
+  backup:
+    image: docker:27-cli
+    container_name: backup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/work
+    working_dir: /work
+    entrypoint: >
+      /bin/sh -c "
+      echo '0 3 * * * /work/scripts/backup-all.sh >> /work/backups/backup.log 2>&1' | crontab - &&
+      crond -f -l 8
+      "
+
   # The ONLY externally exposed endpoint (ADR-0016): TLS-terminated,
   # login-rate-limited reverse proxy in front of Superset. Everything else
   # binds to 127.0.0.1 above.

@@ -1,0 +1,16 @@
+<!-- Native backup target (Issue 10 / ADR-0018): BACKUP ... TO
+     Disk('backups_disk', ...) lands under the ./backups/clickhouse bind
+     mount, which is the stand-in for the off-host backup target. -->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <backups_disk>
+                <type>local</type>
+                <path>/backups/</path>
+            </backups_disk>
+        </disks>
+    </storage_configuration>
+    <backups>
+        <allowed_disk>backups_disk</allowed_disk>
+    </backups>
+</clickhouse>
