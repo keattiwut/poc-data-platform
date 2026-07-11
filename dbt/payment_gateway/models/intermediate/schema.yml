@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: int_reconciled_transactions
+    description: >
+      Bank/Partner reconciliation via FULL OUTER JOIN (ADR-0012). One row per
+      Transaction ID regardless of which side(s) reported it.
+    columns:
+      - name: transaction_id
+        data_tests:
+          - not_null
+          - unique

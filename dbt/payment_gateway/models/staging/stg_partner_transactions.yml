@@ -9,8 +9,16 @@ models:
     columns:
       - name: transaction_id
         description: Gateway-assigned Transaction ID (CONTEXT.md), shared with stg_bank_transactions.
+        data_tests:
+          - not_null
+          # Catches the generator's duplicate-Transaction-ID anomaly (Issue
+          # 05) if the bronze->silver dedup that normally absorbs it ever
+          # regresses - demonstrated live by scripts/verify-dq-tests.sh.
+          - unique
       - name: partner_id
         description: The Partner that originated this transaction.
+        data_tests:
+          - not_null
       - name: bank_id
         description: >
           The Bank this transaction was routed to. The mock gateway knows
@@ -19,3 +27,12 @@ models:
           hasn't reported yet), not just on stg_bank_transactions.
       - name: state
         description: Current lifecycle state - initiated/authorized/captured/settled/failed/refunded.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['initiated', 'authorized', 'captured', 'settled', 'failed', 'refunded']
+      - name: decline_reason
+        description: Why the transaction failed (NULL unless declined; CONTEXT.md reason set).
+        data_tests:
+          - accepted_values:
+              values: ['insufficient_funds', 'fraud_suspected', 'technical_error', 'invalid_account']

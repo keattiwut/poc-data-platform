@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  # Freshness monitoring for the lake's silver zone (Issue 07). The stg_*
+  # views are thin 1:1 windows onto the silver Parquet files (no filters, no
+  # aggregation), so declaring them as this source's relations lets
+  # `dbt source freshness` measure silver-zone freshness without creating a
+  # duplicate ClickHouse relation outside dbt. All four extraction channels
+  # converge into these two tables, so this covers every source feed.
+  #
+  # SLA math (PRD: pipeline must complete before the 6-8 AM business-hours
+  # window): the generator stamps rows within the simulated day and the
+  # pipeline runs at 02:00, so on a healthy day max(updated_at) is *ahead* of
+  # the clock (age <= 0, never stale). If the pipeline misses a day, the
+  # newest row is from yesterday (~23:59), so age reaches:
+  #   4h at 04:00 -> warn fires well before the SLA window even opens
+  #   8h at 08:00 -> error fires exactly when the window closes
+  - name: silver
+    description: Silver-zone transaction tables on the MinIO lake, read via the s3()-backed staging views.
+    database: default
+    schema: default
+    loaded_at_field: updated_at
+    freshness:
+      warn_after: {count: 4, period: hour}
+      error_after: {count: 8, period: hour}
+    tables:
+      - name: silver_partner_transactions
+        identifier: stg_partner_transactions
+      - name: silver_bank_transactions
+        identifier: stg_bank_transactions

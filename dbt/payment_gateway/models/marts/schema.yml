@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: fct_transactions_current
+    description: >
+      Latest version of every Transaction (argMax over the ReplacingMergeTree
+      fact). The uniqueness test lives here, not on fct_transactions - the
+      Replacing engine legitimately holds multiple row versions until merges
+      run, and this view is the deduplicated contract consumers rely on.
+    columns:
+      - name: transaction_id
+        data_tests:
+          - not_null
+          - unique
+
+  - name: mart_transactions
+    description: >
+      Dashboard-facing mart - the fact joined to all four conformed
+      dimensions (ADR-0007). The relationships tests validate every
+      fact-to-dimension foreign key; NULL keys (orphan sides, non-declined
+      transactions) are exempt by dbt's relationships semantics, which is
+      exactly right for this outer-join model.
+    columns:
+      - name: transaction_id
+        data_tests:
+          - not_null
+          - unique
+      - name: partner_key
+        data_tests:
+          - relationships:
+              to: ref('dim_partner')
+              field: partner_key
+      - name: bank_key
+        data_tests:
+          - relationships:
+              to: ref('dim_bank')
+              field: bank_key
+      - name: decline_reason_key
+        data_tests:
+          - relationships:
+              to: ref('dim_decline_reason')
+              field: decline_reason_key
+      - name: date_key
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
