@@ -61,6 +61,8 @@ SFTP_PORT=$(get_field sftp port)
 SFTP_USER=$(get_field sftp user)
 SFTP_PASSWORD=$(get_field sftp password)
 KAFKA_BOOTSTRAP_SERVERS=$(get_field kafka bootstrap_servers)
+GRAFANA_ADMIN_USER=$(get_field grafana admin_user)
+GRAFANA_ADMIN_PASSWORD=$(get_field grafana admin_password)
 
 {
   echo "POSTGRES_USER=${POSTGRES_USER}"
@@ -83,6 +85,8 @@ KAFKA_BOOTSTRAP_SERVERS=$(get_field kafka bootstrap_servers)
   echo "SFTP_USER=${SFTP_USER}"
   echo "SFTP_PASSWORD=${SFTP_PASSWORD}"
   echo "KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}"
+  echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}"
+  echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}"
 } > .env
 
 echo "Rendered .env from Vault secrets."

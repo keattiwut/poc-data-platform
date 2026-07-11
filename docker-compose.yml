@@ -47,6 +47,10 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # POC-only: unauthenticated /minio/v2/metrics/* so Prometheus can
+      # scrape without a bearer token (Issue 08). Non-POC fix: generate the
+      # scrape token via `mc admin prometheus generate` and put it in Vault.
+      MINIO_PROMETHEUS_AUTH_TYPE: public
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -175,6 +179,16 @@ services:
       SFTP_USER: ${SFTP_USER}
       SFTP_PASSWORD: ${SFTP_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      # Observability (Issue 08 / ADR-0008): emit native StatsD metrics to
+      # the statsd-exporter Prometheus bridge, and route task-failure
+      # callbacks to the two Teams severity channels (mock receiver in this
+      # POC - see alertmanager/alertmanager.yml for the production swap).
+      AIRFLOW__METRICS__STATSD_ON: "True"
+      AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
+      AIRFLOW__METRICS__STATSD_PORT: "9125"
+      AIRFLOW__METRICS__STATSD_PREFIX: airflow
+      TEAMS_CRITICAL_WEBHOOK_URL: http://mock-teams:8080/critical
+      TEAMS_WARNING_WEBHOOK_URL: http://mock-teams:8080/warning
       # In-network ClickHouse address for dbt (profiles.yml defaults to the
       # host-side localhost:8124 mapping otherwise).
       CLICKHOUSE_HOST: clickhouse
@@ -230,6 +244,8 @@ services:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config/named_collections.xml:/etc/clickhouse-server/config.d/named_collections.xml:ro
       - ./clickhouse/config/users.d/grant-named-collections.xml:/etc/clickhouse-server/users.d/grant-named-collections.xml:ro
+      # Native Prometheus metrics endpoint on :9363 (Issue 08).
+      - ./clickhouse/config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
     ulimits:
       nofile:
         soft: 262144
@@ -342,12 +358,84 @@ services:
       timeout: 10s
       retries: 10
 
+  # --- Observability stack (Issue 08 / ADR-0008): PLG + alerting -----------
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+  # Airflow's native metrics support is StatsD; this bridges it to a
+  # Prometheus scrape endpoint (the standard Airflow pattern).
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.26.1
+    container_name: statsd-exporter
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: promtail
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+  # Mock Microsoft Teams incoming-webhook receiver: the POC has no Teams
+  # tenant, so Alertmanager and the Airflow failure callbacks post here
+  # (same contract; production swaps the webhook URLs for real ones). The
+  # URLs aren't credentials, hence not in the Vault render.
+  mock-teams:
+    image: python:3.12-alpine
+    container_name: mock-teams
+    command: python /srv/server.py
+    ports:
+      # Host-side access for the verify scripts (8080 is taken by the
+      # Airflow webserver); in-network consumers use mock-teams:8080.
+      - "18080:8080"
+    volumes:
+      - ./docker/mock-teams/server.py:/srv/server.py:ro
+
 volumes:
   vault-data:
   postgres-data:
   minio-data:
   clickhouse-data:
   sftp-data:
+  prometheus-data:
+  loki-data:
+  grafana-data:
 
 networks:
   default:

@@ -32,6 +32,8 @@ sets them to the in-network clickhouse:8123 so this DAG's dbt task connects.
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag
 
+from alerting import notify_critical
+
 EXTRACT = "python /opt/airflow/scripts/extract-to-bronze.py"
 PROMOTE = "python /opt/airflow/scripts/promote-bronze-to-silver.py"
 DBT_DIR = "/opt/airflow/dbt/payment_gateway"
@@ -48,6 +50,9 @@ DBT_DIR = "/opt/airflow/dbt/payment_gateway"
     # trigger). The pipeline is a full rebuild; overlap is never useful.
     max_active_runs=1,
     tags=["payment-gateway"],
+    # Every task here is on the business-pipeline critical path (CONTEXT.md:
+    # extraction failed / dbt build failed / error-severity test = Critical).
+    default_args={"on_failure_callback": notify_critical},
 )
 def daily_pipeline():
     # One dlt extraction task per source channel (ADR-0024). Kafka is drained

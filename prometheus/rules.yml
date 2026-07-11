@@ -1,0 +1,46 @@
+# Alert rules (Issue 08), severities per CONTEXT.md:
+#   Critical - a warehouse/service unreachable (plus extraction/dbt failures,
+#              which arrive via the Airflow failure callback, not these rules)
+#   Warning  - non-blocking: resource usage trending up, metrics gaps
+# Every alert carries a runbook link; there is no on-call rotation, so the
+# responder must be able to act without prior context.
+groups:
+  - name: pipeline-services
+    rules:
+      - alert: ClickHouseUnreachable
+        expr: up{job="clickhouse"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse is unreachable (warehouse down - dashboards and dbt builds will fail)"
+          runbook: "https://github.com/keattiwut/poc-data-platform/blob/master/docs/runbooks/clickhouse-unreachable.md"
+
+      - alert: MinIOUnreachable
+        expr: up{job="minio"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MinIO is unreachable (data lake down - extraction and promotion will fail)"
+          runbook: "https://github.com/keattiwut/poc-data-platform/blob/master/docs/runbooks/extraction-task-failed.md"
+
+      - alert: AirflowMetricsAbsent
+        expr: up{job="airflow"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Airflow StatsD metrics are not being scraped (statsd-exporter down or Airflow not emitting)"
+          runbook: "https://github.com/keattiwut/poc-data-platform/blob/master/docs/runbooks/extraction-task-failed.md"
+
+      - alert: MinIOLowFreeSpace
+        expr: >
+          minio_cluster_capacity_usable_free_bytes
+            / minio_cluster_capacity_usable_total_bytes < 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MinIO usable capacity below 20% - disk usage trending toward full"
+          runbook: "https://github.com/keattiwut/poc-data-platform/blob/master/docs/runbooks/extraction-task-failed.md"
