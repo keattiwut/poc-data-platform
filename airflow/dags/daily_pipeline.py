@@ -39,7 +39,9 @@ DBT_DIR = "/opt/airflow/dbt/payment_gateway"
 
 @dag(
     dag_id="daily_pipeline",
-    schedule="@daily",
+    # 02:00, two hours after mock_data_producer (00:00), so each day's mock
+    # batch exists before extraction runs (Issue 05 / ADR-0010).
+    schedule="0 2 * * *",
     catchup=False,
     # Two overlapping runs race in dbt ("Table already exists", observed on
     # first bring-up when unpausing created a scheduled run next to a manual

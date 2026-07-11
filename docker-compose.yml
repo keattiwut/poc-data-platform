@@ -155,7 +155,9 @@ services:
       # (duckdb for bronze->silver promotion, dbt for the build step, dlt +
       # per-source extras for the ADR-0024 extraction tasks) at container
       # start. Slows startup; a custom image is the non-POC fix.
-      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-duckdb dbt-core dbt-clickhouse dlt[sql_database,filesystem,sftp] pyarrow psycopg2-binary confluent-kafka}
+      # paramiko/kafka-python: the mock generator + reset script (Issue 05)
+      # now also run as tasks in this container.
+      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-duckdb dbt-core dbt-clickhouse dlt[sql_database,filesystem,sftp] pyarrow psycopg2-binary confluent-kafka paramiko kafka-python}
       # Runtime env for the DAG's tasks (in-network endpoints, not host ones).
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -182,6 +184,8 @@ services:
       # The promotion script and dbt project the daily_pipeline DAG invokes.
       - ./scripts:/opt/airflow/scripts:ro
       - ./dbt:/opt/airflow/dbt
+      # The mock generator the mock_data_producer DAG invokes (Issue 05).
+      - ./mock:/opt/airflow/mock:ro
     command: scheduler
 
   # New mandatory component in Airflow 3: the scheduler no longer parses DAG
