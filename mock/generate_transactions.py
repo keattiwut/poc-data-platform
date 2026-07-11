@@ -315,7 +315,7 @@ def main() -> None:
     # host. Running this script directly on the host: override at
     # invocation time, e.g.
     # POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222 \
-    #   KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
+    #   KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9094 \
     #   python3 mock/generate_transactions.py
     conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],

@@ -25,7 +25,7 @@ $EXTRACT
 
 # See scripts/verify-postgres-minio.sh for why `mc alias set` with real
 # credentials is required before `mc find` against the minio container.
-docker compose exec -T minio mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
+docker compose exec -T minio mc alias set local https://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
 
 PARTNER_COUNT=$(count_bronze_parquet partner_transactions)
 BANK_COUNT=$(count_bronze_parquet bank_transactions)

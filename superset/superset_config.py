@@ -34,9 +34,10 @@ DATABASE_HOST = get_env_variable("DATABASE_HOST")
 DATABASE_PORT = get_env_variable("DATABASE_PORT")
 DATABASE_DB = get_env_variable("DATABASE_DB")
 
+# sslmode=require: TLS to the metadata Postgres (Issue 09 / ADR-0017).
 SQLALCHEMY_DATABASE_URI = (
     f"{DATABASE_DIALECT}://{DATABASE_USER}:{DATABASE_PASSWORD}"
-    f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_DB}"
+    f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_DB}?sslmode=require"
 )
 
 SECRET_KEY = get_env_variable("SUPERSET_SECRET_KEY")

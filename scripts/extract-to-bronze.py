@@ -26,12 +26,13 @@ scheduler): POSTGRES_HOST/PORT/USER/PASSWORD, MINIO_ENDPOINT +
 MINIO_ROOT_USER/PASSWORD, SFTP_HOST/PORT/USER/PASSWORD,
 KAFKA_BOOTSTRAP_SERVERS. Host-side runs override the hosts/ports as usual
 (e.g. POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222
-KAFKA_BOOTSTRAP_SERVERS=localhost:9094).
+KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9094).
 """
 import csv
 import io
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from urllib.parse import quote_plus
@@ -47,6 +48,14 @@ TIMESTAMP_FIELDS = {
     "settled_at", "failed_at", "refunded_at", "updated_at",
 }
 
+# ADR-0015 guard (Issue 09): sources must send masked/tokenized identifiers,
+# never raw PANs / full account numbers. Any standalone 13-19 digit run in a
+# string field looks like one, and extraction REFUSES the batch (fail loud,
+# keep the platform out of PCI scope) rather than masking after the fact.
+# The dbt test no_pan_like_values on staging is the warehouse-side backstop
+# covering the Postgres channels too.
+PAN_LIKE = re.compile(r"(?<!\d)\d{13,19}(?!\d)")
+
 
 def canonical_row(row: dict) -> dict:
     out = {}
@@ -58,6 +67,12 @@ def canonical_row(row: dict) -> dict:
         elif key == "amount_cents":
             out[key] = int(value)
         else:
+            if isinstance(value, str) and PAN_LIKE.search(value):
+                raise ValueError(
+                    f"ADR-0015 violation: field '{key}' contains a PAN-like "
+                    "digit run (13-19 digits); refusing to load this batch. "
+                    "Sources must send masked/tokenized identifiers only."
+                )
             out[key] = value
     return out
 
@@ -68,10 +83,12 @@ def bronze_pipeline(channel: str, dataset: str) -> dlt.Pipeline:
         pipeline_name=f"bronze_{channel}",
         destination=dlt.destinations.filesystem(
             bucket_url="s3://data-lake/bronze",
+            # Least-privilege service user, read/write bronze/ only
+            # (Issue 09; root is MinIO administration only).
             credentials={
-                "aws_access_key_id": os.environ["MINIO_ROOT_USER"],
-                "aws_secret_access_key": os.environ["MINIO_ROOT_PASSWORD"],
-                "endpoint_url": f"http://{minio_endpoint}",
+                "aws_access_key_id": os.environ["MINIO_EXTRACTION_USER"],
+                "aws_secret_access_key": os.environ["MINIO_EXTRACTION_PASSWORD"],
+                "endpoint_url": f"{os.environ.get('MINIO_SCHEME', 'https')}://{minio_endpoint}",
             },
             layout="{table_name}/{load_id}.{file_id}.{ext}",
         ),
@@ -88,6 +105,7 @@ def extract_postgres(channel: str, table: str) -> None:
         f"@{os.environ.get('POSTGRES_HOST', 'localhost')}:"
         f"{os.environ.get('POSTGRES_PORT', '5432')}"
         f"/{os.environ.get('POSTGRES_DB', 'pipeline')}"
+        "?sslmode=require"  # TLS to the source DB (Issue 09 / ADR-0017)
     )
     # backend="pyarrow" streams Arrow straight to Parquet (verified in
     # scripts/spike-dlt-partner-extraction.py, the ADR-0024 prototype).

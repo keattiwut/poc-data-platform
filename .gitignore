@@ -13,3 +13,4 @@ logs/
 *.log
 .user.yml
 .DS_Store
+tls/

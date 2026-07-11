@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
+VAULT_ADDR="${VAULT_ADDR:-https://localhost:8200}"
+# Vault serves TLS from the local internal CA (Issue 09 / ADR-0017);
+# clients verify against it rather than passing -k.
+VAULT_CACERT="${VAULT_CACERT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tls/ca.crt}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEYS_FILE="${SCRIPT_DIR}/../vault/.vault-keys.json"
 
 echo "Checking Vault is reachable..."
-SEAL_STATUS=$(curl -sf "${VAULT_ADDR}/v1/sys/seal-status" || echo "UNREACHABLE")
+SEAL_STATUS=$(curl --cacert "${VAULT_CACERT}" -sf "${VAULT_ADDR}/v1/sys/seal-status" || echo "UNREACHABLE")
 if [ "$SEAL_STATUS" = "UNREACHABLE" ]; then
   echo "FAIL: Vault is not reachable at ${VAULT_ADDR}"
   exit 1
@@ -30,7 +40,7 @@ if [ -z "${VAULT_TOKEN:-}" ]; then
 fi
 
 echo "Checking secret/postgres exists in Vault..."
-curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
+curl --cacert "${VAULT_CACERT}" -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
   "${VAULT_ADDR}/v1/secret/data/postgres" > /dev/null
 
 echo "PASS: Vault is up, unsealed, and secret/postgres is populated"

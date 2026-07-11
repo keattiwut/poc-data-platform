@@ -9,7 +9,7 @@ set -a; source .env; set +a
 
 # See scripts/verify-postgres-minio.sh for why `mc alias set` with real
 # credentials is required before `mc find` against the minio container.
-docker compose exec -T minio mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
+docker compose exec -T minio mc alias set local https://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
 
 for table in partner_transactions bank_transactions; do
   echo "Checking bronze-zone Parquet exists for ${table} across channel datasets..."

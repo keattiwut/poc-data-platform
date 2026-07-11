@@ -9,7 +9,7 @@ set -a; source .env; set +a
 # scripts/verify-sftp-kafka-infra.sh); .env itself is left untouched.
 SFTP_HOST=localhost
 SFTP_PORT=12222
-KAFKA_BOOTSTRAP_SERVERS="localhost:9094"
+KAFKA_BOOTSTRAP_SERVERS="127.0.0.1:9094"
 
 echo "Checking SFTP upload/ has partner and bank CSV files..."
 SFTP_COUNTS=$(python3 -c "

@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
 set -a; source .env; set +a
 
 echo "Checking fct_transactions_current reconciliation: rows exist, no duplicate transaction_ids, both partner-only and bank-only rows are handled, fees are computed for captured transactions..."
@@ -8,7 +15,7 @@ trap 'rm -f "$CH_NETRC"' EXIT
 chmod 600 "$CH_NETRC"
 printf 'machine localhost login %s password %s\n' "$CLICKHOUSE_USER" "$CLICKHOUSE_PASSWORD" > "$CH_NETRC"
 
-RESULT=$(curl -sf --netrc-file "$CH_NETRC" "http://localhost:8124/" --data-binary @- <<'EOSQL'
+RESULT=$(curl -sf --netrc-file "$CH_NETRC" --cacert tls/ca.crt "https://localhost:8124/" --data-binary @- <<'EOSQL'
 SELECT
     count(*) AS total_rows,
     count(*) - count(DISTINCT transaction_id) AS duplicate_transaction_ids,

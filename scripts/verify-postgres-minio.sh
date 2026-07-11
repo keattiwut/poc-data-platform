@@ -16,7 +16,7 @@ echo "Checking data-lake bucket exists..."
 set -a
 source .env
 set +a
-docker compose exec -T minio mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
+docker compose exec -T minio mc alias set local https://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null
 docker compose exec -T minio mc ls local/data-lake > /dev/null
 
 echo "PASS: PostgreSQL and MinIO are up, data-lake bucket exists"

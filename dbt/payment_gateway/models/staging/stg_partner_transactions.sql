@@ -23,6 +23,6 @@ SELECT
 -- would.
 FROM s3(
     minio_s3,
-    url = 'http://minio:9000/data-lake/silver/partner_transactions/*.parquet',
+    url = 'https://minio:9000/data-lake/silver/partner_transactions/*.parquet',
     format = 'Parquet'
 )

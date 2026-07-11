@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Git Bash ships a Schannel-built curl: a private CA has no revocation
+# endpoint, so revocation checking must be turned off there for --cacert to
+# verify (no-op on OpenSSL-built curls, which skip this branch).
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+
 # Initialize and/or unseal the server-mode Vault (ADR-0023). Idempotent:
 #   - uninitialized -> initialize with 1 key share / threshold 1 (HTTP-API
 #                      equivalent of `vault operator init -key-shares=1
@@ -12,18 +19,21 @@ set -euo pipefail
 # auto-mounted it, server mode does not, and every other script here reads
 # and writes /v1/secret/data/* paths.
 
-VAULT_ADDR="${VAULT_ADDR:-http://localhost:8200}"
+VAULT_ADDR="${VAULT_ADDR:-https://localhost:8200}"
+# Vault serves TLS from the local internal CA (Issue 09 / ADR-0017);
+# clients verify against it rather than passing -k.
+VAULT_CACERT="${VAULT_CACERT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tls/ca.crt}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEYS_FILE="${SCRIPT_DIR}/.vault-keys.json"
 
-seal_status=$(curl -sf "${VAULT_ADDR}/v1/sys/seal-status") \
+seal_status=$(curl --cacert "${VAULT_CACERT}" -sf "${VAULT_ADDR}/v1/sys/seal-status") \
   || { echo "ERROR: Vault unreachable at ${VAULT_ADDR}" >&2; exit 1; }
 initialized=$(echo "${seal_status}" | jq -r .initialized)
 sealed=$(echo "${seal_status}" | jq -r .sealed)
 
 if [ "${initialized}" != "true" ]; then
   echo "Vault is uninitialized — initializing (1 key share, threshold 1)..."
-  init_response=$(curl -sf -X PUT \
+  init_response=$(curl --cacert "${VAULT_CACERT}" -sf -X PUT \
     -d '{"secret_shares": 1, "secret_threshold": 1}' \
     "${VAULT_ADDR}/v1/sys/init")
   umask 077
@@ -42,7 +52,7 @@ if [ "${sealed}" = "true" ]; then
     echo "ERROR: no unseal key found in ${KEYS_FILE}" >&2
     exit 1
   fi
-  unseal_response=$(curl -sf -X PUT \
+  unseal_response=$(curl --cacert "${VAULT_CACERT}" -sf -X PUT \
     -d "{\"key\": \"${unseal_key}\"}" \
     "${VAULT_ADDR}/v1/sys/unseal")
   if [ "$(echo "${unseal_response}" | jq -r .sealed)" != "false" ]; then
@@ -63,9 +73,9 @@ if [ -z "${VAULT_TOKEN:-}" ]; then
   fi
   VAULT_TOKEN=$(jq -r .root_token "${KEYS_FILE}")
 fi
-if ! curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_ADDR}/v1/sys/mounts" \
+if ! curl --cacert "${VAULT_CACERT}" -sf -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_ADDR}/v1/sys/mounts" \
     | jq -e '."secret/"' > /dev/null; then
-  curl -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  curl --cacert "${VAULT_CACERT}" -sf -H "X-Vault-Token: ${VAULT_TOKEN}" \
     -X POST \
     -d '{"type": "kv", "options": {"version": "2"}}' \
     "${VAULT_ADDR}/v1/sys/mounts/secret" > /dev/null

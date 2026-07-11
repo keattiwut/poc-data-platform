@@ -1,0 +1,39 @@
+<!-- At-rest encryption for warehouse data (Issue 09 / ADR-0017): wraps the
+     default disk in ClickHouse's `encrypted` disk type (AES-128-CTR), key
+     from the Vault render via env. The merge_tree default below makes every
+     (re)created MergeTree table land on the encrypted policy - dbt rebuilds
+     all tables each run, so the whole warehouse migrates on the next build.
+     Known ceiling: system/log tables keep the plain default disk. -->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <!-- The implicit `default` disk can't be wrapped ("must have
+                 been announced earlier"), so declare a local base disk on
+                 the same clickhouse-data volume and encrypt on top of it. -->
+            <encrypted_base>
+                <type>local</type>
+                <path>/var/lib/clickhouse/encrypted_base/</path>
+            </encrypted_base>
+            <encrypted_disk>
+                <type>encrypted</type>
+                <disk>encrypted_base</disk>
+                <path>encrypted/</path>
+                <!-- 32-byte key from the Vault render -> AES-256. -->
+                <algorithm>AES_256_CTR</algorithm>
+                <key_hex from_env="CLICKHOUSE_DISK_KEY_HEX"/>
+            </encrypted_disk>
+        </disks>
+        <policies>
+            <encrypted_policy>
+                <volumes>
+                    <main>
+                        <disk>encrypted_disk</disk>
+                    </main>
+                </volumes>
+            </encrypted_policy>
+        </policies>
+    </storage_configuration>
+    <merge_tree>
+        <storage_policy>encrypted_policy</storage_policy>
+    </merge_tree>
+</clickhouse>

@@ -145,8 +145,11 @@ def main() -> None:
     # --- database + dataset (check-before-create) ---------------------------
     # In-network address: Superset talks to ClickHouse over the Compose
     # network (8123), not the host-remapped 8124.
+    # TLS to ClickHouse's https interface (Issue 09); verify=false because
+    # the cert is from the local self-signed CA - traffic is encrypted.
     uri = (f"clickhousedb://{os.environ['CLICKHOUSE_USER']}:"
-           f"{os.environ['CLICKHOUSE_PASSWORD']}@clickhouse:8123/default")
+           f"{os.environ['CLICKHOUSE_PASSWORD']}@clickhouse:8443/default"
+           "?secure=true&verify=false")
     db_id = find_one(s, "/api/v1/database/", "database_name", "ClickHouse")
     if db_id:
         call(s, "PUT", f"/api/v1/database/{db_id}", json={"sqlalchemy_uri": uri})

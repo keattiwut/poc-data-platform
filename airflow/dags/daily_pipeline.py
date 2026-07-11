@@ -83,8 +83,11 @@ def daily_pipeline():
 
     # Freshness SLA check (Issue 07): breaches when silver's newest row is
     # stale enough that the 6-8 AM window is at risk (thresholds documented
-    # in models/sources.yml). Runs beside dbt_build, not in front of it - a
-    # freshness alarm should not stop the data that DID arrive from flowing.
+    # in models/sources.yml). Sequenced AFTER dbt_build rather than beside
+    # it: two concurrent dbt processes collide on the ClickHouse session
+    # ("Session ... is locked by a concurrent client", observed live), and
+    # putting the alarm last means a freshness breach can never stop the
+    # data that DID arrive from flowing.
     source_freshness = BashOperator(
         task_id="dbt_source_freshness",
         bash_command=f"cd {DBT_DIR} && DBT_PROFILES_DIR=. dbt source freshness",
@@ -95,8 +98,7 @@ def daily_pipeline():
     # parallel, then transform.
     extracts >> promote_partner
     extracts >> promote_bank
-    [promote_partner, promote_bank] >> dbt_build
-    [promote_partner, promote_bank] >> source_freshness
+    [promote_partner, promote_bank] >> dbt_build >> source_freshness
 
 
 daily_pipeline()

@@ -11,4 +11,8 @@ payment_gateway:
       port: "{{ env_var('CLICKHOUSE_PORT', '8124') | as_number }}"
       user: "{{ env_var('CLICKHOUSE_USER') }}"
       password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
-      secure: false
+      # TLS to ClickHouse's https_port (Issue 09 / ADR-0017). verify: false
+      # because the cert comes from the local self-signed CA - traffic is
+      # encrypted; CA pinning is the production upgrade.
+      secure: true
+      verify: false
