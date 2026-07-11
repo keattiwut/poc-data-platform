@@ -42,8 +42,11 @@ echo "=== Running dbt seed + models ==="
 ./scripts/verify-stg-bank-transactions.sh
 ./scripts/verify-fct-transactions.sh
 
-echo "=== Verifying Superset charts ==="
+echo "=== Configuring + verifying the Superset dashboard ==="
+# Idempotent: creates the ClickHouse connection, mart dataset, all charts,
+# and the dashboard on first run; refreshes them in place afterwards.
+python3 scripts/configure-superset-dashboard.py
 ./scripts/verify-superset-chart.sh
 
 echo ""
-echo "=== BANK RECONCILIATION COMPLETE: generator (partner+bank, 4 channels) -> dlt (postgres+sftp+kafka) -> lake -> dbt (reconciliation + fees) -> ClickHouse -> Superset (4 charts) ==="
+echo "=== BANK RECONCILIATION COMPLETE: generator (partner+bank, 4 channels) -> dlt (postgres+sftp+kafka) -> lake -> dbt (reconciliation + fees) -> ClickHouse -> Superset (12-chart dashboard) ==="
