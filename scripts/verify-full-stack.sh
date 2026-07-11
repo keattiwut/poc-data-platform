@@ -52,7 +52,7 @@ echo "=== Running per-service verification ==="
 ./scripts/verify-airflow.sh
 ./scripts/verify-clickhouse.sh
 ./scripts/verify-superset.sh
-./scripts/verify-airbyte.sh
+./scripts/verify-sftp-kafka-infra.sh
 ./scripts/verify-dbt.sh
 ./scripts/check-no-committed-secrets.sh
 

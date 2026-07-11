@@ -6,17 +6,47 @@ Extends Issue 02's Partner-only generator (mock/generate_partner_transactions.py
 with a correlated Bank side (Issue 03) - still not the full ADR-0010 spec
 (no Faker, no daily scheduling, no full anomaly catalog - that's Issue 05).
 """
+import csv
+import json
 import os
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import paramiko
 import psycopg2
+from kafka import KafkaProducer
 
 TRANSACTION_COUNT = int(os.environ.get("MOCK_TRANSACTION_COUNT", "200"))
 PARTNER_IDS = ["partner_acme", "partner_globex", "partner_initech"]
 BANK_IDS = ["bank_chase", "bank_wells_fargo", "bank_citibank"]
 DECLINE_REASONS = ["insufficient_funds", "fraud_suspected", "technical_error", "invalid_account"]
+
+# Issue 04: each Partner/Bank has ONE stable integration channel (mirrors
+# ADR-0010's "stable profile per entity" - a real institution doesn't
+# switch integration methods transaction-by-transaction), covering the
+# PRD's four source types (database, Excel/CSV-via-SFTP, Kafka).
+PARTNER_CHANNEL = {
+    "partner_acme": "postgres",
+    "partner_globex": "sftp",
+    "partner_initech": "kafka",
+}
+BANK_CHANNEL = {
+    "bank_chase": "postgres",
+    "bank_wells_fargo": "sftp",
+    "bank_citibank": "kafka",
+}
+
+PARTNER_COLUMNS = (
+    "transaction_id", "partner_id", "bank_id", "amount_cents", "currency", "state",
+    "decline_reason", "initiated_at", "authorized_at", "captured_at",
+    "settled_at", "failed_at", "refunded_at", "updated_at",
+)
+BANK_COLUMNS = (
+    "transaction_id", "partner_id", "bank_id", "amount_cents", "currency", "state",
+    "decline_reason", "authorized_at", "captured_at", "settled_at", "failed_at",
+    "refunded_at", "updated_at",
+)
 
 # Roughly: 90% initiated->authorized, of those 95% ->captured->settled,
 # 5% fail after authorization. 10% never even authorize (declined outright).
@@ -169,11 +199,55 @@ def insert_bank_row(cur, row: dict) -> None:
     )
 
 
+def serialize_for_transport(row: dict) -> dict:
+    """CSV and JSON can't natively hold datetime objects (unlike psycopg2's
+    Postgres driver, which accepts them directly) - convert to ISO8601
+    strings for the SFTP/Kafka channels."""
+    return {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()}
+
+
+def write_sftp_csv(rows: list, columns: tuple, remote_filename: str) -> None:
+    if not rows:
+        return
+    transport = paramiko.Transport((os.environ["SFTP_HOST"], int(os.environ["SFTP_PORT"])))
+    transport.connect(username=os.environ["SFTP_USER"], password=os.environ["SFTP_PASSWORD"])
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    try:
+        with sftp.open(f"upload/{remote_filename}", "w") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(serialize_for_transport(row))
+    finally:
+        sftp.close()
+        transport.close()
+    print(f"Wrote {len(rows)} rows to SFTP upload/{remote_filename}")
+
+
+def produce_kafka_messages(rows: list, topic: str) -> None:
+    if not rows:
+        return
+    producer = KafkaProducer(
+        bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
+    try:
+        for row in rows:
+            producer.send(topic, serialize_for_transport(row))
+        producer.flush()
+    finally:
+        producer.close()
+    print(f"Produced {len(rows)} messages to Kafka topic '{topic}'")
+
+
 def main() -> None:
-    # .env's POSTGRES_HOST is "postgres" (the Docker Compose service name),
+    # .env's POSTGRES_HOST/SFTP_HOST are Docker Compose service names,
     # correct for container-to-container traffic but unreachable from the
-    # host. Running this script directly on the host: override at invocation
-    # time, e.g. `POSTGRES_HOST=localhost python3 mock/generate_transactions.py`
+    # host. Running this script directly on the host: override at
+    # invocation time, e.g.
+    # POSTGRES_HOST=localhost SFTP_HOST=localhost SFTP_PORT=12222 \
+    #   KAFKA_BOOTSTRAP_SERVERS=localhost:9094 \
+    #   python3 mock/generate_transactions.py
     conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
         port=os.environ["POSTGRES_PORT"],
@@ -181,13 +255,17 @@ def main() -> None:
         password=os.environ["POSTGRES_PASSWORD"],
         dbname="pipeline",
     )
+    sftp_partner_rows = []
+    sftp_bank_rows = []
+    kafka_partner_rows = []
+    kafka_bank_rows = []
     try:
         with conn.cursor() as cur:
             with open("mock/schema.sql") as f:
                 cur.execute(f.read())
 
-            partner_written = 0
-            bank_written = 0
+            partner_written = {"postgres": 0, "sftp": 0, "kafka": 0}
+            bank_written = {"postgres": 0, "sftp": 0, "kafka": 0}
             for _ in range(TRANSACTION_COUNT):
                 outcome = build_transaction()
                 roll = random.random()
@@ -195,15 +273,37 @@ def main() -> None:
                 write_bank = not (ORPHAN_RATE / 2 <= roll < ORPHAN_RATE)
 
                 if write_partner:
-                    insert_partner_row(cur, to_partner_row(outcome))
-                    partner_written += 1
+                    partner_row = to_partner_row(outcome)
+                    channel = PARTNER_CHANNEL[outcome["partner_id"]]
+                    if channel == "postgres":
+                        insert_partner_row(cur, partner_row)
+                    elif channel == "sftp":
+                        sftp_partner_rows.append(partner_row)
+                    else:
+                        kafka_partner_rows.append(partner_row)
+                    partner_written[channel] += 1
+
                 if write_bank:
-                    insert_bank_row(cur, to_bank_row(outcome))
-                    bank_written += 1
+                    bank_row = to_bank_row(outcome)
+                    channel = BANK_CHANNEL[outcome["bank_id"]]
+                    if channel == "postgres":
+                        insert_bank_row(cur, bank_row)
+                    elif channel == "sftp":
+                        sftp_bank_rows.append(bank_row)
+                    else:
+                        kafka_bank_rows.append(bank_row)
+                    bank_written[channel] += 1
 
         conn.commit()
-        print(f"Seeded {partner_written} partner_transactions rows and {bank_written} bank_transactions rows "
-              f"({TRANSACTION_COUNT} transactions total, orphan rate ~{ORPHAN_RATE:.0%}).")
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        write_sftp_csv(sftp_partner_rows, PARTNER_COLUMNS, f"partner_transactions_{timestamp}.csv")
+        write_sftp_csv(sftp_bank_rows, BANK_COLUMNS, f"bank_transactions_{timestamp}.csv")
+        produce_kafka_messages(kafka_partner_rows, "partner-transactions")
+        produce_kafka_messages(kafka_bank_rows, "bank-transactions")
+
+        print(f"Seeded {TRANSACTION_COUNT} transactions across channels: "
+              f"partner={partner_written}, bank={bank_written}")
     finally:
         conn.close()
 

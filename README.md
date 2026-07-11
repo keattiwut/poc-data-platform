@@ -1,6 +1,6 @@
 # poc-data-pipeline — Infra Bootstrap
 
-Operator notes for bringing up the local self-hosted data pipeline stack (Vault, Postgres, MinIO, Airflow, ClickHouse, Superset, Airbyte, dbt).
+Operator notes for bringing up the local self-hosted data pipeline stack (Vault, Postgres, MinIO, Airflow, ClickHouse, Superset, dbt, plus the mock SFTP server and Kafka broker; extraction is dlt running as Airflow tasks).
 
 ## Bring-up order
 
@@ -38,6 +38,6 @@ Credentials are sourced from Vault at a **render step**, not read live from Vaul
 
 This satisfies "credentials are never hardcoded and always originate from Vault," but it's a lighter-weight integration than a live runtime Vault read — the `.env` file is a point-in-time snapshot, and containers never talk to Vault themselves after that. A future issue could wire direct runtime Vault reads (e.g. via Vault Agent or the Vault Airflow/Kubernetes secrets backend) if that stronger guarantee becomes necessary.
 
-## Airbyte's credentials are out of scope for this Vault
+## Vault coverage is complete (the old Airbyte gap is closed)
 
-Airbyte is deployed via `abctl` into its own local `kind` Kubernetes cluster (see [ADR-0020](docs/adr/0020-airbyte-via-abctl.md)), separate from the Docker Compose stack the rest of these services run on. Airbyte manages its own credentials inside that cluster, independent of this Vault instance. This is a known, accepted gap in Vault coverage for this POC, not a bug — closing it would mean integrating Vault with Airbyte's own Kubernetes-based secrets handling, which is out of scope here.
+Every credential in the platform now comes from the Vault render described above. This was not always true: extraction originally ran on Airbyte, deployed via `abctl` into its own local `kind` Kubernetes cluster ([ADR-0020](docs/adr/0020-airbyte-via-abctl.md)) that managed its own credentials outside this Vault — an accepted coverage gap at the time. [ADR-0024](docs/adr/0024-dlt-instead-of-airbyte.md) replaced Airbyte with dlt pipelines running as ordinary Airflow tasks (`scripts/extract-to-bronze.py`, one task per source channel in the `daily_pipeline` DAG), and Issue 04 retired the Airbyte deployment entirely. If a stale install lingers, remove it with `abctl local uninstall` (add `--persisted` to also delete its volumes) — nothing in this repo depends on it anymore.

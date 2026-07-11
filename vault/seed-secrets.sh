@@ -55,4 +55,15 @@ put_secret "clickhouse" \
 put_secret "superset" \
   "\"secret_key\": \"$(openssl rand -base64 42)\", \"admin_user\": \"admin\", \"admin_password\": \"$(random_password)\""
 
+# In-network address, like postgres/kafka above (the container listens on 22;
+# 2222 is only the host-side port mapping — host-side scripts override both
+# host and port). Issue 04 fix: this was seeded as the inconsistent
+# host="sftp"/port="2222" hybrid before the first in-network consumer (the
+# dlt SFTP extraction task) existed to notice.
+put_secret "sftp" \
+  "\"host\": \"sftp\", \"port\": \"22\", \"user\": \"mockuser\", \"password\": \"$(random_password)\""
+
+put_secret "kafka" \
+  "\"bootstrap_servers\": \"kafka:9092\""
+
 echo "Vault secret seeding complete."
