@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: dim_partner
+    description: Conformed partner dimension (ADR-0007).
+    columns:
+      - name: partner_key
+        description: Surrogate key (deterministic cityHash64 of partner_id).
+        data_tests:
+          - not_null
+          - unique
+      - name: partner_id
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_bank
+    description: Conformed bank dimension (ADR-0007).
+    columns:
+      - name: bank_key
+        description: Surrogate key (deterministic cityHash64 of bank_id).
+        data_tests:
+          - not_null
+          - unique
+      - name: bank_id
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_decline_reason
+    description: Conformed decline-reason dimension, unioned across both reporting sides.
+    columns:
+      - name: decline_reason_key
+        description: Surrogate key (deterministic cityHash64 of decline_reason).
+        data_tests:
+          - not_null
+          - unique
+      - name: decline_reason
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_date
+    description: Conformed date dimension with calendar attributes for period comparisons.
+    columns:
+      - name: date_key
+        description: Surrogate key (yyyymmdd integer).
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        data_tests:
+          - not_null
+          - unique

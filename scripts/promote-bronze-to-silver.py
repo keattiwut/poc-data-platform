@@ -36,6 +36,11 @@ MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
 
 def promote(table: str) -> None:
     columns = ", ".join(COLUMNS[table])
+    # Data-quality demo hook (Issue 07, used only by verify-dq-tests.sh):
+    # skips the dedup so the generator's injected duplicate Transaction IDs
+    # reach silver, proving the dbt unique tests actually catch them. Never
+    # set in the DAG.
+    skip_dedup = os.environ.get("PROMOTE_SKIP_DEDUP") == "1"
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
     con.execute(f"""
@@ -46,6 +51,7 @@ def promote(table: str) -> None:
         SET s3_url_style='path';
     """)
 
+    dedup_filter = "TRUE" if skip_dedup else "rn = 1"
     con.execute(f"""
         COPY (
             SELECT {columns} FROM (
@@ -59,10 +65,11 @@ def promote(table: str) -> None:
                     union_by_name=true
                 )
             )
-            WHERE rn = 1
+            WHERE {dedup_filter}
         ) TO 's3://data-lake/silver/{table}/data.parquet' (FORMAT PARQUET);
     """)
-    print(f"Promoted bronze/*/{table} -> silver/{table}")
+    print(f"Promoted bronze/*/{table} -> silver/{table}"
+          + (" WITHOUT dedup (dq demo)" if skip_dedup else ""))
 
 
 def main() -> None:

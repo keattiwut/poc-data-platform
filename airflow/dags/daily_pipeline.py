@@ -76,12 +76,22 @@ def daily_pipeline():
         bash_command=f"cd {DBT_DIR} && DBT_PROFILES_DIR=. dbt build",
     )
 
+    # Freshness SLA check (Issue 07): breaches when silver's newest row is
+    # stale enough that the 6-8 AM window is at risk (thresholds documented
+    # in models/sources.yml). Runs beside dbt_build, not in front of it - a
+    # freshness alarm should not stop the data that DID arrive from flowing.
+    source_freshness = BashOperator(
+        task_id="dbt_source_freshness",
+        bash_command=f"cd {DBT_DIR} && DBT_PROFILES_DIR=. dbt source freshness",
+    )
+
     # SFTP/Kafka extractions feed both tables, so both promotions wait for
     # all four channels; promotions are independent tables -> run in
     # parallel, then transform.
     extracts >> promote_partner
     extracts >> promote_bank
     [promote_partner, promote_bank] >> dbt_build
+    [promote_partner, promote_bank] >> source_freshness
 
 
 daily_pipeline()

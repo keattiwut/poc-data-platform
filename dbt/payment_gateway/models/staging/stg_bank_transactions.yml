@@ -10,7 +10,21 @@ models:
     columns:
       - name: transaction_id
         description: Gateway-assigned Transaction ID (CONTEXT.md), shared with stg_partner_transactions.
+        data_tests:
+          - not_null
+          - unique
       - name: bank_id
         description: The Bank that processed this transaction.
+        data_tests:
+          - not_null
       - name: state
-        description: authorized/captured/settled/failed - no "initiated" (Partner-only state).
+        description: authorized/captured/settled/failed/refunded - no "initiated" (Partner-only state).
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['authorized', 'captured', 'settled', 'failed', 'refunded']
+      - name: decline_reason
+        description: Why the transaction failed (NULL unless declined; CONTEXT.md reason set).
+        data_tests:
+          - accepted_values:
+              values: ['insufficient_funds', 'fraud_suspected', 'technical_error', 'invalid_account']
