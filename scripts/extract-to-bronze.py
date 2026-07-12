@@ -48,6 +48,14 @@ TIMESTAMP_FIELDS = {
     "settled_at", "failed_at", "refunded_at", "updated_at",
 }
 
+# Fail-loud schema drift (Issue 10 / ADR-0019): the first run of each
+# channel freezes its schema; a NEW or RETYPED column from a source then
+# fails the extraction task (which routes to the Critical Teams channel via
+# the Issue-08 failure callback) instead of silently propagating into the
+# lake. A renamed column is a new column plus a missing one - the new name
+# trips the freeze. Reviewed drift ships as a code change here.
+SCHEMA_CONTRACT = {"tables": "evolve", "columns": "freeze", "data_type": "freeze"}
+
 # ADR-0015 guard (Issue 09): sources must send masked/tokenized identifiers,
 # never raw PANs / full account numbers. Any standalone 13-19 digit run in a
 # string field looks like one, and extraction REFUSES the batch (fail loud,
@@ -79,7 +87,7 @@ def canonical_row(row: dict) -> dict:
 
 def bronze_pipeline(channel: str, dataset: str) -> dlt.Pipeline:
     minio_endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
-    return dlt.pipeline(
+    pipeline = dlt.pipeline(
         pipeline_name=f"bronze_{channel}",
         destination=dlt.destinations.filesystem(
             bucket_url="s3://data-lake/bronze",
@@ -94,6 +102,13 @@ def bronze_pipeline(channel: str, dataset: str) -> dlt.Pipeline:
         ),
         dataset_name=dataset,
     )
+    # A previous failed run (e.g. a schema-contract violation, ADR-0019)
+    # leaves its extracted-but-unloaded package pending, and dlt would replay
+    # the offending data forever. Dropping pending packages is safe here:
+    # pipeline state (incl. Kafka offsets) only advances on successful loads,
+    # so the discarded data is re-extracted cleanly on this run.
+    pipeline.drop_pending_packages()
+    return pipeline
 
 
 def extract_postgres(channel: str, table: str) -> None:
@@ -111,7 +126,8 @@ def extract_postgres(channel: str, table: str) -> None:
     # scripts/spike-dlt-partner-extraction.py, the ADR-0024 prototype).
     resource = sql_table(credentials=creds, table=table, backend="pyarrow")
     info = bronze_pipeline(channel, channel).run(
-        resource, loader_file_format="parquet", write_disposition="replace"
+        resource, loader_file_format="parquet", write_disposition="replace",
+        schema_contract=SCHEMA_CONTRACT,
     )
     print(info)
 
@@ -141,7 +157,8 @@ def extract_sftp() -> None:
     # Full refresh: every run re-reads all CSVs still on the server, like the
     # Postgres channels re-read their whole table.
     info = bronze_pipeline("sftp", "sftp_drop").run(
-        resources, loader_file_format="parquet", write_disposition="replace"
+        resources, loader_file_format="parquet", write_disposition="replace",
+        schema_contract=SCHEMA_CONTRACT,
     )
     print(info)
 
@@ -179,7 +196,8 @@ def extract_kafka() -> None:
     # state is ever lost the drain restarts from earliest and the silver dedup
     # absorbs the duplicates.
     info = bronze_pipeline("kafka", "kafka_drain").run(
-        resources, loader_file_format="parquet", write_disposition="append"
+        resources, loader_file_format="parquet", write_disposition="append",
+        schema_contract=SCHEMA_CONTRACT,
     )
     print(info)
 

@@ -35,9 +35,10 @@ python3 scripts/promote-bronze-to-silver.py partner_transactions
 python3 scripts/promote-bronze-to-silver.py bank_transactions
 ./scripts/verify-silver-promotion.sh
 
-echo "=== Running dbt seed + models ==="
-(cd dbt/payment_gateway && DBT_PROFILES_DIR=. dbt seed)
-(cd dbt/payment_gateway && DBT_PROFILES_DIR=. dbt run)
+echo "=== Running dbt build (seed + models + data-quality tests) ==="
+# build = seed + run + test in dependency order - the same command the
+# daily_pipeline DAG runs, so CI (Issue 10) exercises the tests too.
+(cd dbt/payment_gateway && DBT_PROFILES_DIR=. dbt build)
 ./scripts/verify-stg-partner-transactions.sh
 ./scripts/verify-stg-bank-transactions.sh
 ./scripts/verify-fct-transactions.sh
