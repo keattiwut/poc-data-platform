@@ -1,0 +1,786 @@
+<title>Payment Gateway Data Platform — Interactive Guide</title>
+<style>
+  :root {
+    --ink: #10201c;
+    --ink-2: #24413a;
+    --paper: #f1f3ee;
+    --card: #ffffff;
+    --line: #ccd6d0;
+    --text: #1c2b26;
+    --muted: #5b6f67;
+    --accent: #128a68;
+    --accent-ink: #0b5c46;
+    --accent-soft: rgba(18, 138, 104, 0.10);
+    --ok: #128a68;
+    --warn: #b8860f;
+    --crit: #c4472f;
+    --term-bg: #10201c;
+    --term-text: #cfe4db;
+    --chip: #e4e9e4;
+    --shadow: 0 1px 2px rgba(16, 32, 28, 0.08), 0 8px 24px rgba(16, 32, 28, 0.07);
+    --mono: "Cascadia Code", "SF Mono", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+    --body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1a17;
+      --card: #142521;
+      --line: #27423a;
+      --text: #d8e5df;
+      --muted: #8aa79c;
+      --accent: #2fbd93;
+      --accent-ink: #6fd9b8;
+      --accent-soft: rgba(47, 189, 147, 0.12);
+      --ok: #2fbd93;
+      --warn: #d9a441;
+      --crit: #e06a52;
+      --term-bg: #0a1512;
+      --term-text: #bcd8cd;
+      --chip: #1d332c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0d1a17; --card: #142521; --line: #27423a; --text: #d8e5df;
+    --muted: #8aa79c; --accent: #2fbd93; --accent-ink: #6fd9b8;
+    --accent-soft: rgba(47, 189, 147, 0.12); --ok: #2fbd93; --warn: #d9a441;
+    --crit: #e06a52; --term-bg: #0a1512; --term-text: #bcd8cd; --chip: #1d332c;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --paper: #f1f3ee; --card: #ffffff; --line: #ccd6d0; --text: #1c2b26;
+    --muted: #5b6f67; --accent: #128a68; --accent-ink: #0b5c46;
+    --accent-soft: rgba(18,138,104,0.10); --ok: #128a68; --warn: #b8860f;
+    --crit: #c4472f; --term-bg: #10201c; --term-text: #cfe4db; --chip: #e4e9e4;
+    --shadow: 0 1px 2px rgba(16,32,28,0.08), 0 8px 24px rgba(16,32,28,0.07);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+  body {
+    margin: 0; background: var(--paper); color: var(--text);
+    font-family: var(--body); font-size: 16px; line-height: 1.6;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 0 24px 96px; }
+  a { color: var(--accent-ink); }
+  code, .mono { font-family: var(--mono); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--accent-ink); margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--mono); font-weight: 650; text-wrap: balance;
+    font-size: clamp(28px, 4.4vw, 44px); line-height: 1.15; margin: 0 0 14px;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-family: var(--mono); font-weight: 600; font-size: 22px;
+    margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance;
+  }
+  h3 { font-size: 16px; margin: 0 0 4px; }
+  .section { margin-top: 72px; }
+  .section > p.lede { max-width: 62ch; color: var(--muted); margin: 0 0 24px; }
+
+  /* ---------- header ---------- */
+  header.site {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 0 0; font-family: var(--mono); font-size: 13px;
+  }
+  header.site .brand { color: var(--muted); letter-spacing: 0.08em; }
+  header.site nav { display: flex; gap: 18px; flex-wrap: wrap; }
+  header.site nav a { color: var(--muted); text-decoration: none; }
+  header.site nav a:hover { color: var(--accent-ink); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 64px 0 8px; }
+  .hero p.sub { max-width: 64ch; color: var(--muted); margin: 0; }
+  .hero .stats {
+    display: flex; gap: 28px; flex-wrap: wrap; margin-top: 26px;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .hero .stat b { display: block; font-size: 22px; color: var(--accent-ink); font-weight: 650; }
+  .hero .stat span { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ---------- pipeline map ---------- */
+  .map-wrap {
+    margin-top: 40px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; box-shadow: var(--shadow); padding: 22px 18px 8px;
+  }
+  .map-title {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    letter-spacing: 0.14em; text-transform: uppercase; padding: 0 6px 12px;
+  }
+  .map-scroll { overflow-x: auto; padding-bottom: 10px; }
+  .lane { display: flex; align-items: stretch; gap: 0; min-width: 900px; padding: 4px 6px; }
+  .lane + .lane { margin-top: 10px; }
+  .lane-label {
+    flex: 0 0 92px; font-family: var(--mono); font-size: 11px; color: var(--muted);
+    letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center;
+  }
+  .lane-nodes { display: flex; align-items: center; gap: 0; flex: 1; }
+  .node {
+    font-family: var(--mono); font-size: 13px; line-height: 1.35;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; cursor: pointer; text-align: left; color: var(--text);
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    flex: 1 1 0; min-width: 0;
+  }
+  .node small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .node:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .node[aria-pressed="true"] {
+    background: var(--accent-soft); border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .flow {
+    flex: 0 0 26px; text-align: center; color: var(--accent);
+    font-family: var(--mono); font-size: 14px; user-select: none;
+  }
+  .node .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); margin-right: 7px; vertical-align: 1px;
+  }
+  .lane.support .node .dot { background: var(--warn); }
+  .pulse { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ---------- detail panel ---------- */
+  .detail {
+    margin: 14px 6px 14px; border-top: 1px dashed var(--line); padding-top: 16px;
+    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 22px;
+  }
+  @media (max-width: 760px) { .detail { grid-template-columns: 1fr; } }
+  .detail h3 { font-family: var(--mono); font-size: 15px; }
+  .detail .how { color: var(--text); margin: 6px 0 0; font-size: 14.5px; }
+  .detail .facts { font-size: 13px; }
+  .detail .facts dt {
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--muted); margin-top: 10px;
+  }
+  .detail .facts dd { margin: 2px 0 0; }
+  .detail .facts code {
+    background: var(--chip); padding: 1px 6px; border-radius: 4px; font-size: 12px;
+  }
+
+  /* ---------- module cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 14px; box-shadow: var(--shadow);
+  }
+  .card .k {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent-ink); margin-bottom: 8px;
+  }
+  .card h3 { font-family: var(--mono); font-size: 15px; }
+  .card p { font-size: 14px; color: var(--text); margin: 8px 0 10px; }
+  .card .files { font-size: 12px; color: var(--muted); }
+  .card .files code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  /* ---------- tables ---------- */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th {
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--muted); text-align: left;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td code { background: var(--chip); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; white-space: nowrap; }
+  td.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    padding: 2px 8px; border-radius: 999px; letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .chip.ext { background: var(--crit); color: #fff; }
+  .chip.int { background: var(--chip); color: var(--muted); }
+  .chip.tls { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
+
+  /* ---------- terminal / try-it ---------- */
+  .term {
+    background: var(--term-bg); color: var(--term-text); border-radius: 10px;
+    box-shadow: var(--shadow); overflow: hidden; margin-top: 14px;
+  }
+  .term .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 14px; font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.45);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .term pre {
+    margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+    font-size: 13px; line-height: 1.7;
+  }
+  .term .c { color: rgba(207, 228, 219, 0.45); }
+  .term .p { color: #6fd9b8; user-select: none; }
+  .copy {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    background: transparent; color: inherit; border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 5px; padding: 3px 10px; cursor: pointer;
+  }
+  .copy:hover { border-color: #6fd9b8; color: #6fd9b8; }
+
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .tab {
+    font-family: var(--mono); font-size: 12.5px; padding: 7px 14px;
+    border: 1px solid var(--line); background: var(--card); color: var(--muted);
+    border-radius: 999px; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .tabpanel { display: none; }
+  .tabpanel.active { display: block; }
+  .tabpanel > p { max-width: 68ch; color: var(--muted); font-size: 14px; margin: 14px 0 0; }
+
+  .note {
+    border-left: 3px solid var(--warn); background: var(--card);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 14px;
+    color: var(--text); margin-top: 20px; box-shadow: var(--shadow);
+  }
+  footer {
+    margin-top: 80px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<main>
+  <header class="site">
+    <div class="brand">poc-data-platform</div>
+    <nav aria-label="sections">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#modules">Modules</a>
+      <a href="#access">Access</a>
+      <a href="#try">Try it</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <p class="eyebrow">Payment Gateway · Data Platform POC</p>
+    <h1>One trustworthy answer to “how are we actually performing?”</h1>
+    <p class="sub">
+      Banks and Partners report the same transactions through four different channels —
+      direct database, CSV files dropped on SFTP, and a Kafka queue. This platform
+      extracts all of them nightly, reconciles both sides of every transaction by its
+      gateway ID, computes fees, and serves a single dashboard the business can trust.
+      Every module below is clickable, every claim has a verify script, and the whole
+      stack runs from one <code>docker compose</code> file.
+    </p>
+    <div class="stats" aria-label="platform figures">
+      <div class="stat"><b>4</b><span>source channels</span></div>
+      <div class="stat"><b>38</b><span>data-quality tests</span></div>
+      <div class="stat"><b>12</b><span>dashboard charts</span></div>
+      <div class="stat"><b>19</b><span>compose services</span></div>
+      <div class="stat"><b>~24h</b><span>backup RPO</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="pipeline">
+    <p class="eyebrow">Interactive map</p>
+    <h2>Click any module to see how it works</h2>
+    <p class="lede">
+      The nightly run at 02:00: four extraction channels converge into the lake,
+      get deduplicated into silver, reconciled and tested by dbt, and land in the
+      dashboard before business hours. The support lane guards everything.
+    </p>
+
+    <div class="map-wrap">
+      <div class="map-title">
+        <span>daily_pipeline · 02:00 UTC</span>
+        <span class="pulse" aria-hidden="true">● live</span>
+      </div>
+      <div class="map-scroll">
+        <div class="lane" role="group" aria-label="data flow">
+          <div class="lane-label">Data flow</div>
+          <div class="lane-nodes">
+            <button class="node" data-mod="generator"><span class="dot"></span>Mock generator<small>mock_data_producer · 00:00</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="channels"><span class="dot"></span>4 channels<small>Postgres · SFTP · Kafka</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="dlt"><span class="dot"></span>dlt extraction<small>contracts + PAN guard</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="lake"><span class="dot"></span>Lake (MinIO)<small>bronze → silver</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="dbt"><span class="dot"></span>dbt<small>reconcile · dims · tests</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="clickhouse"><span class="dot"></span>ClickHouse<small>encrypted warehouse</small></button>
+            <div class="flow" aria-hidden="true">→</div>
+            <button class="node" data-mod="superset"><span class="dot"></span>Superset<small>12-chart dashboard</small></button>
+          </div>
+        </div>
+        <div class="lane support" role="group" aria-label="platform services">
+          <div class="lane-label">Platform</div>
+          <div class="lane-nodes">
+            <button class="node" data-mod="airflow"><span class="dot"></span>Airflow 3<small>orchestrates everything</small></button>
+            <div class="flow" aria-hidden="true">·</div>
+            <button class="node" data-mod="vault"><span class="dot"></span>Vault<small>every credential</small></button>
+            <div class="flow" aria-hidden="true">·</div>
+            <button class="node" data-mod="observability"><span class="dot"></span>Observability<small>PLG + Teams alerts</small></button>
+            <div class="flow" aria-hidden="true">·</div>
+            <button class="node" data-mod="security"><span class="dot"></span>Security<small>TLS · encryption · least-priv</small></button>
+            <div class="flow" aria-hidden="true">·</div>
+            <button class="node" data-mod="backups"><span class="dot"></span>Backups<small>daily 03:00 · restores proven</small></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail" id="detail" aria-live="polite">
+        <div>
+          <h3 id="d-title">Select a module</h3>
+          <p class="how" id="d-how">
+            Click any node above. This panel explains how the module works, which files
+            implement it, and the one command that proves it.
+          </p>
+        </div>
+        <dl class="facts">
+          <dt>Key files</dt><dd id="d-files">—</dd>
+          <dt>Prove it</dt><dd><code id="d-verify">—</code></dd>
+          <dt>Design record</dt><dd id="d-adr">—</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="modules">
+    <p class="eyebrow">Module reference</p>
+    <h2>How each layer earns its place</h2>
+    <p class="lede">
+      Grouped by what the business gets from it. Every card names its implementation
+      and the ADR that recorded the decision — nothing here is undocumented behavior.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <div class="k">Sources</div>
+        <h3>Mock generator &amp; channel routing</h3>
+        <p>
+          Six Partners and four Banks, each with a stable profile (auth rate, decline mix,
+          volume weight) and one fixed integration channel. Every simulated day produces
+          ~1,500 correlated transaction pairs — plus deliberate anomalies (orphans,
+          duplicate IDs, missing files) so the tests downstream have something real to catch.
+          First run backfills 45 days; a manual <code>reset_mock_data</code> DAG wipes and reseeds everything.
+        </p>
+        <div class="files">ADR-0010 · <code>mock/generate_transactions.py</code> · <code>airflow/dags/mock_data_producer.py</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Extraction</div>
+        <h3>dlt pipelines, one per channel</h3>
+        <p>
+          Plain Python replacing an entire Airbyte/Kubernetes deployment (ADR-0024). Each
+          channel is its own pipeline writing Parquet to bronze: Postgres full-refresh,
+          SFTP CSVs re-read each run, Kafka drained incrementally with offsets in dlt state.
+          Schema contracts freeze columns and types — drift fails loudly. A PAN-shaped value
+          in any field refuses the whole batch before it touches the lake.
+        </p>
+        <div class="files">ADR-0024/0019/0015 · <code>scripts/extract-to-bronze.py</code> · <code>scripts/kafka_source/</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Lake</div>
+        <h3>Medallion zones on MinIO</h3>
+        <p>
+          Bronze holds raw per-channel Parquet (<code>bronze/&lt;channel&gt;/&lt;table&gt;/</code>);
+          the promotion step deduplicates by transaction ID keeping the latest
+          <code>updated_at</code>, writing one clean file per table to silver. The bucket is
+          SSE-S3 encrypted, and each consumer authenticates with its own least-privilege user.
+        </p>
+        <div class="files">ADR-0017 · <code>scripts/promote-bronze-to-silver.py</code> · <code>docker/minio/setup-service-users.sh</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Transform</div>
+        <h3>dbt: reconciliation, dimensions, 38 tests</h3>
+        <p>
+          A FULL OUTER JOIN reconciles the Partner and Bank views of every transaction
+          (orphans survive by design); fees compute at capture from the seed schedule.
+          Four conformed dimensions with deterministic surrogate keys feed a mart that every
+          chart shares. <code>dbt build</code> runs the models and all tests in one pass, and
+          source freshness alarms before the 6–8 AM SLA window closes.
+        </p>
+        <div class="files">ADR-0007/0012 · <code>dbt/payment_gateway/models/</code> · <code>models/sources.yml</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Warehouse</div>
+        <h3>ClickHouse on an encrypted disk</h3>
+        <p>
+          Staging views read silver straight from MinIO over TLS via the s3() table function
+          — the warehouse is fully rebuildable from the lake at any time. All MergeTree data
+          lands on an AES-256 encrypted disk by default policy; the query surface for dbt and
+          Superset is HTTPS only.
+        </p>
+        <div class="files">ADR-0017/0022 · <code>clickhouse/config/storage-encryption.xml</code> · <code>tls.xml</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Serve</div>
+        <h3>Superset behind the only public door</h3>
+        <p>
+          Twelve charts across the four PRD pillars — volume (gross/net), authorization and
+          settlement rates, revenue, per-Bank/Partner comparisons and decline breakdowns,
+          week-over-week via the date dimension. Everything renders in ~1–2 s. The one
+          externally reachable endpoint is an nginx TLS proxy with a rate-limited login;
+          every other UI binds to loopback.
+        </p>
+        <div class="files">ADR-0016 · <code>scripts/configure-superset-dashboard.py</code> · <code>nginx/superset-proxy.conf</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Trust</div>
+        <h3>Vault-first credentials</h3>
+        <p>
+          Every secret in the platform — service passwords, encryption keys, per-service lake
+          users — originates in Vault and reaches containers through one render step. There is
+          no credential outside this flow, and the render fails loudly if any field is missing.
+        </p>
+        <div class="files">ADR-0006/0023 · <code>vault/seed-secrets.sh</code> · <code>scripts/render-env-from-vault.sh</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Watch</div>
+        <h3>Observability with proof it fires</h3>
+        <p>
+          Prometheus scrapes ClickHouse, MinIO, and Airflow; Loki aggregates every container's
+          logs; Grafana correlates both. Alerts route by severity to two Teams channels from
+          two directions — Alertmanager rules and Airflow failure callbacks — each carrying a
+          runbook link. Stopping ClickHouse really does produce the Critical card in ~2 minutes.
+        </p>
+        <div class="files">ADR-0008 · <code>prometheus/rules.yml</code> · <code>airflow/dags/alerting.py</code> · <code>docs/runbooks/</code></div>
+      </div>
+      <div class="card">
+        <div class="k">Recover</div>
+        <h3>Backups that restore</h3>
+        <p>
+          A cron container backs up Postgres, ClickHouse (native BACKUP), the whole lake, and
+          Vault's storage daily at 03:00 with 14-day retention. The verify script doesn't check
+          that backups exist — it restores all four systems and compares, including standing up
+          a scratch Vault from the tarball and reading a secret out of it.
+        </p>
+        <div class="files">ADR-0018 · <code>scripts/backup-all.sh</code> · <code>scripts/verify-backups.sh</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="access">
+    <p class="eyebrow">Access directory</p>
+    <h2>Every door, and which network it opens onto</h2>
+    <p class="lede">
+      Loopback = the “internal network” of this single-host POC. Exactly one endpoint is
+      exposed beyond it. All admin credentials come from the Vault render — read them with
+      <code>grep &lt;NAME&gt; .env</code> after bring-up; nothing uses a default password.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>What</th><th>URL / endpoint</th><th>Reach</th><th>Credentials (.env)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Business dashboard</b> (Superset via TLS proxy)</td>
+            <td class="mono">https://&lt;host&gt;:8443</td>
+            <td><span class="chip ext">external</span> <span class="chip tls">TLS</span></td>
+            <td class="mono">SUPERSET_ADMIN_*</td>
+          </tr>
+          <tr>
+            <td>Superset (direct)</td>
+            <td class="mono">http://localhost:8088</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">SUPERSET_ADMIN_*</td>
+          </tr>
+          <tr>
+            <td>Airflow UI — DAGs, task logs, triggers</td>
+            <td class="mono">http://localhost:8080</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">AIRFLOW_ADMIN_*</td>
+          </tr>
+          <tr>
+            <td>Grafana — “Pipeline Infra Health”</td>
+            <td class="mono">http://localhost:3000</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">GRAFANA_ADMIN_*</td>
+          </tr>
+          <tr>
+            <td>MinIO console (lake browser)</td>
+            <td class="mono">http://localhost:9001</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">MINIO_ROOT_*</td>
+          </tr>
+          <tr>
+            <td>Vault API/UI</td>
+            <td class="mono">https://localhost:8200</td>
+            <td><span class="chip int">loopback</span> <span class="chip tls">TLS</span></td>
+            <td class="mono">vault/.vault-keys.json</td>
+          </tr>
+          <tr>
+            <td>ClickHouse HTTPS (dbt, SQL clients)</td>
+            <td class="mono">https://localhost:8124</td>
+            <td><span class="chip int">loopback</span> <span class="chip tls">TLS</span></td>
+            <td class="mono">CLICKHOUSE_*</td>
+          </tr>
+          <tr>
+            <td>Prometheus / Alertmanager</td>
+            <td class="mono">http://localhost:9090 · :9093</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">—</td>
+          </tr>
+          <tr>
+            <td>Mock Teams channels (see what alerts fired)</td>
+            <td class="mono">http://localhost:18080/messages</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">—</td>
+          </tr>
+          <tr>
+            <td>Mock sources: Postgres · SFTP · Kafka</td>
+            <td class="mono">localhost:5432 · :12222 · 127.0.0.1:9094</td>
+            <td><span class="chip int">loopback</span></td>
+            <td class="mono">POSTGRES_* · SFTP_* · —</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <b>Repository:</b> <a href="https://github.com/keattiwut/poc-data-platform">github.com/keattiwut/poc-data-platform</a>
+      &nbsp;·&nbsp; operator handbook at <code>docs/OPERATIONS.md</code>, incident runbooks at
+      <code>docs/runbooks/</code>, design records at <code>docs/adr/</code>.
+    </div>
+  </section>
+
+  <section class="section" id="try">
+    <p class="eyebrow">Try the solution</p>
+    <h2>From zero to dashboard, then break it on purpose</h2>
+    <div class="tabs" role="tablist" aria-label="try-it recipes">
+      <button class="tab" role="tab" aria-selected="true" data-panel="p-up">1 · Bring it up</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-run">2 · Run the pipeline</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-break">3 · Break it on purpose</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-reset">4 · Verify &amp; reset</button>
+    </div>
+
+    <div class="tabpanel active" id="p-up" role="tabpanel">
+      <p>
+        Prerequisites: Docker Desktop, Git Bash (or any POSIX shell), Python 3 with
+        <code>paramiko kafka-python psycopg2-binary duckdb requests dbt-core dbt-clickhouse</code>.
+        One script does the whole sequence — TLS material, Vault init/unseal, secret seeding,
+        credential render, full stack, per-service health checks.
+      </p>
+      <div class="term">
+        <div class="bar"><span>bring-up</span><button class="copy" data-copy="git clone https://github.com/keattiwut/poc-data-platform.git && cd poc-data-platform
+./scripts/verify-full-stack.sh">copy</button></div>
+        <pre><span class="p">$</span> git clone https://github.com/keattiwut/poc-data-platform.git &amp;&amp; cd poc-data-platform
+<span class="p">$</span> ./scripts/verify-full-stack.sh
+<span class="c"># certs → vault init/unseal → seed → render .env → compose up → health checks</span>
+<span class="c"># first boot: allow ~5 min while the Airflow scheduler installs task deps</span>
+
+<span class="c"># after any reboot, Vault comes back sealed — recovery is always just:</span>
+<span class="p">$</span> docker compose up -d &amp;&amp; ./vault/init-unseal.sh</pre>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="p-run" role="tabpanel">
+      <p>
+        The producer's first run backfills 45 days of history across all four channels;
+        the pipeline extracts, promotes, reconciles, tests, and the dashboard fills in.
+        Or skip the DAGs and drive it end-to-end from one script.
+      </p>
+      <div class="term">
+        <div class="bar"><span>run</span><button class="copy" data-copy='docker compose exec airflow-scheduler airflow dags trigger mock_data_producer
+docker compose exec airflow-scheduler airflow dags trigger daily_pipeline
+./scripts/verify-walking-skeleton.sh'>copy</button></div>
+        <pre><span class="p">$</span> docker compose exec airflow-scheduler airflow dags trigger mock_data_producer
+<span class="c"># first run: 45-day backfill (~67k transactions) into Postgres, SFTP, Kafka</span>
+<span class="p">$</span> docker compose exec airflow-scheduler airflow dags trigger daily_pipeline
+<span class="c"># 4 dlt extracts → 2 promotions → dbt build (38 tests) → freshness check</span>
+
+<span class="c"># or the whole thing, generator to dashboard, with assertions at every step:</span>
+<span class="p">$</span> ./scripts/verify-walking-skeleton.sh</pre>
+      </div>
+      <p>
+        Then open the dashboard (<code>http://localhost:8088</code>, credentials from
+        <code>grep SUPERSET .env</code>) — the volume chart's total will match the
+        warehouse row count exactly; the verify script checks that too.
+      </p>
+    </div>
+
+    <div class="tabpanel" id="p-break" role="tabpanel">
+      <p>
+        The platform's defenses are demonstrable, not decorative. Each demo injects a real
+        failure, watches the right alarm fire on the Critical channel, and recovers.
+      </p>
+      <div class="term">
+        <div class="bar"><span>break-it demos</span><button class="copy" data-copy="./scripts/verify-schema-drift.sh
+./scripts/verify-dq-tests.sh
+./scripts/verify-observability.sh
+./scripts/verify-security.sh">copy</button></div>
+        <pre><span class="p">$</span> ./scripts/verify-schema-drift.sh
+<span class="c"># drops a CSV with a surprise column → extraction fails the schema contract</span>
+<span class="c"># → Critical Teams alert with runbook link → recovers after removal</span>
+<span class="p">$</span> ./scripts/verify-dq-tests.sh
+<span class="c"># lets the generator's duplicate IDs through → the unique test catches them</span>
+<span class="p">$</span> ./scripts/verify-observability.sh
+<span class="c"># stops ClickHouse for real → ClickHouseUnreachable fires within ~2 min</span>
+<span class="p">$</span> ./scripts/verify-security.sh
+<span class="c"># PAN-carrying file refused · encryption verified · rate limit returns 429</span>
+
+<span class="c"># watch the alert channels while any of these run:</span>
+<span class="p">$</span> curl -s http://localhost:18080/messages | python -m json.tool</pre>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="p-reset" role="tabpanel">
+      <p>
+        The full verification battery is nine scripts; the operator handbook indexes them all.
+        A clean slate for demos is one DAG away — it wipes all five systems (including the
+        Kafka offset state that naive resets forget) and reseeds a fresh backfill.
+      </p>
+      <div class="term">
+        <div class="bar"><span>verify &amp; reset</span><button class="copy" data-copy="./scripts/verify-backups.sh
+docker compose exec airflow-scheduler airflow dags trigger reset_mock_data">copy</button></div>
+        <pre><span class="p">$</span> ./scripts/verify-backups.sh
+<span class="c"># restores Postgres, ClickHouse, a lake object, and a scratch Vault — and checks them</span>
+<span class="p">$</span> docker compose exec airflow-scheduler airflow dags trigger reset_mock_data
+<span class="c"># wipe mock DB + SFTP + Kafka + dlt state + lake + warehouse → reseed → re-run</span>
+
+<span class="c"># tear down (volumes survive); add -v only if you want to erase everything</span>
+<span class="p">$</span> docker compose down</pre>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>payment-gateway data platform · POC · verified 2026-07-12</span>
+    <span>issues 01–14 shipped · full battery green</span>
+  </footer>
+</main>
+
+<script>
+  const MODULES = {
+    generator: {
+      title: "Mock generator (mock_data_producer, daily 00:00)",
+      how: "Simulates the gateway's world one day at a time: ~1,500 transactions with a shared lifecycle outcome per transaction, so the Partner and Bank rows stay correlated. Ten fixed entities each keep a stable profile — base authorization rate, decline-reason mix, volume weight, and one integration channel. Anomalies are injected at configurable rates (10% orphans, 2% duplicate IDs on file/queue channels, 5% missing SFTP drops) precisely so the downstream defenses stay honest. The first run against an empty database backfills 45 days.",
+      files: "mock/generate_transactions.py · airflow/dags/mock_data_producer.py",
+      verify: "./scripts/verify-mock-producer.sh",
+      adr: "ADR-0010 — mock data strategy"
+    },
+    channels: {
+      title: "Four source channels",
+      how: "Each entity delivers through exactly one channel, mirroring reality: two Partners and two Banks write straight into the mock Postgres; two of each drop timestamped CSVs into an SFTP upload directory (SSH-encrypted by protocol); the rest publish JSON messages to per-side Kafka topics, which the pipeline drains as a nightly batch rather than streaming (ADR-0001). Kafka data lives on a named volume so queued messages survive restarts.",
+      files: "docker-compose.yml (sftp, kafka services) · mock/generate_transactions.py",
+      verify: "./scripts/verify-sftp-kafka-generated.sh",
+      adr: "ADR-0001 — batch-first · ADR-0010"
+    },
+    dlt: {
+      title: "dlt extraction — four pipelines in plain Python",
+      how: "One small pipeline per channel runs as an ordinary Airflow task (this replaced an entire Airbyte-on-Kubernetes deployment, ADR-0024). Postgres channels snapshot via Arrow straight to Parquet; the SFTP channel lists and parses CSVs; the Kafka channel tracks consumed offsets in dlt state so each drain is incremental. Two guards run before anything reaches the lake: schema contracts freeze columns and types (drift fails the task and pages Critical), and any string field carrying a 13–19 digit run is refused as PAN-like (ADR-0015).",
+      files: "scripts/extract-to-bronze.py · scripts/kafka_source/ (vendored verified source)",
+      verify: "./scripts/verify-kafka-drain.sh",
+      adr: "ADR-0024 — dlt over Airbyte · ADR-0019 · ADR-0015"
+    },
+    lake: {
+      title: "Data lake — bronze and silver on MinIO",
+      how: "Bronze preserves raw extraction output per channel (bronze/<channel>/<table>/*.parquet) so channels can never clobber each other. Promotion reads every channel's files for a table, deduplicates by transaction ID keeping the newest updated_at — this is where the generator's duplicate-ID anomaly gets absorbed — and writes one clean Parquet file to silver. The bucket is SSE-S3 encrypted with a Vault-held key, and each consumer uses its own least-privilege user: extraction can only touch bronze, promotion reads bronze/writes silver, the warehouse reads silver only.",
+      files: "scripts/promote-bronze-to-silver.py · docker/minio/setup-service-users.sh",
+      verify: "./scripts/verify-dlt-bronze.sh && ./scripts/verify-silver-promotion.sh",
+      adr: "ADR-0017 — encryption · review finding 7"
+    },
+    dbt: {
+      title: "dbt — reconciliation, dimensions, and 38 tests",
+      how: "Staging views window straight onto silver. The intermediate model FULL OUTER JOINs the Partner and Bank views on transaction ID — a one-sided transaction survives as an orphan row rather than disappearing, which is the whole reconciliation story. Fees compute at capture from the seeded fee schedule. Four conformed dimensions (bank, partner, decline reason, a 3-year calendar) carry deterministic hash keys into the mart every chart shares. dbt build runs 38 tests — uniqueness, referential integrity, accepted values, PAN backstop — and source freshness alarms at 4h/8h staleness, bracketing the 6–8 AM SLA.",
+      files: "dbt/payment_gateway/models/ · models/sources.yml (freshness SLA math)",
+      verify: "./scripts/verify-dq-tests.sh",
+      adr: "ADR-0007 · ADR-0012 — reconciliation via outer join"
+    },
+    clickhouse: {
+      title: "ClickHouse — the rebuildable, encrypted warehouse",
+      how: "The warehouse holds no unique state: staging views read silver directly from MinIO over TLS via the s3() table function, so a full rebuild is just another dbt build. All MergeTree data lands on an AES-256-CTR encrypted disk by default storage policy (key from Vault). Queries from dbt and Superset travel HTTPS-only; the s3() credential is a named collection ClickHouse masks in logs.",
+      files: "clickhouse/config/storage-encryption.xml · tls.xml · named_collections.xml",
+      verify: "./scripts/verify-clickhouse.sh",
+      adr: "ADR-0017 · ADR-0022 — s3-view join bug history"
+    },
+    superset: {
+      title: "Superset — twelve charts, one shared mart",
+      how: "Every chart reads mart_transactions — the fact joined to all four dimensions — so no chart re-derives its own definition of a bank, a week, or net volume. The set covers the PRD's four pillars: gross/net volume with a weekly comparison, authorization and settlement rates, gross/net revenue, per-Bank and per-Partner volume and decline-reason breakdowns. Configuration is a rerunnable Python script, so a fresh environment self-builds the whole dashboard. External access passes through an nginx TLS proxy whose login endpoint rate-limits to 10 attempts/minute.",
+      files: "scripts/configure-superset-dashboard.py · nginx/superset-proxy.conf",
+      verify: "./scripts/verify-superset-chart.sh",
+      adr: "ADR-0016 — exposure model"
+    },
+    airflow: {
+      title: "Airflow 3 — three DAGs, LocalExecutor",
+      how: "mock_data_producer (00:00) generates the day's data; daily_pipeline (02:00) runs extraction → promotion → dbt build → freshness, sequenced so a freshness alarm can never block data that did arrive; reset_mock_data is manual-only and wipes all five systems before reseeding. Every task failure posts a severity-routed Teams card via the shared callback. Tasks run inside the scheduler container, whose Python dependencies install at boot (POC route; a custom image is the production fix).",
+      files: "airflow/dags/daily_pipeline.py · mock_data_producer.py · reset_mock_data.py · alerting.py",
+      verify: "./scripts/verify-airflow.sh",
+      adr: "ADR-0021 — Airflow 3 before the first DAG"
+    },
+    vault: {
+      title: "Vault — the single credential source",
+      how: "Server mode with the file backend on a named volume: secrets survive restarts, and the trade-off is that Vault always returns sealed — one script unseals it. Seeding writes every secret the platform needs (service admins, per-service lake users, both encryption keys); the render step snapshots them into a git-ignored .env that Compose injects. Coverage is complete — retiring Airbyte closed the last gap — and the render fails loudly on any missing field rather than writing empty values.",
+      files: "vault/seed-secrets.sh · vault/init-unseal.sh · scripts/render-env-from-vault.sh",
+      verify: "./scripts/verify-vault.sh",
+      adr: "ADR-0006 · ADR-0023 — file storage backend"
+    },
+    observability: {
+      title: "Observability — PLG stack + two-channel Teams alerting",
+      how: "Prometheus scrapes ClickHouse's native endpoint, MinIO's cluster metrics, and Airflow through a StatsD bridge; Promtail ships every container's logs to Loki tagged by service; Grafana's infra dashboard puts service-up state, throughput, capacity, and correlated logs on one screen — deliberately separate from Superset, which stays business-only. Alerts reach two Teams channels by severity from both directions: Alertmanager rules for infrastructure and Airflow callbacks for task failures. Every alert carries a runbook link, and the outage demo proves the loop end to end.",
+      files: "prometheus/rules.yml · alertmanager/alertmanager.yml · airflow/dags/alerting.py · docs/runbooks/",
+      verify: "./scripts/verify-observability.sh",
+      adr: "ADR-0008 — observability design"
+    },
+    security: {
+      title: "Security — encrypted, least-privileged, one public door",
+      how: "In transit: a local internal CA signs per-service certs; Vault, MinIO, ClickHouse, and Postgres all serve TLS and every consumer verifies or encrypts. At rest: SSE-S3 on the lake, AES-256 disk under the warehouse. At the boundary: extraction refuses PAN-like values outright, keeping the platform out of PCI scope by construction. Exposure: exactly one endpoint faces beyond loopback — the TLS-terminated, rate-limited Superset proxy. And the lake's consumers each hold a scoped user; root credentials are administration-only.",
+      files: "scripts/generate-tls-certs.sh · nginx/superset-proxy.conf · scripts/verify-security.sh",
+      verify: "./scripts/verify-security.sh",
+      adr: "ADR-0015 · ADR-0016 · ADR-0017"
+    },
+    backups: {
+      title: "Backups — daily, restorable, and actually restored",
+      how: "A cron container runs the backup script at 03:00: pg_dumpall plus a per-database dump, ClickHouse's native BACKUP DATABASE to a dedicated disk, an mc mirror of the whole lake, and a tarball of Vault's storage backend — into a date-stamped directory with 14-day retention (the POC's stand-in for an off-host target). The verify script performs real restores of all four systems, including standing up a scratch Vault from the tarball, unsealing it, and reading a secret back out.",
+      files: "scripts/backup-all.sh · scripts/verify-backups.sh · docs/OPERATIONS.md §5",
+      verify: "./scripts/verify-backups.sh",
+      adr: "ADR-0018 — ~24h RPO"
+    }
+  };
+
+  const nodes = document.querySelectorAll(".node");
+  const dTitle = document.getElementById("d-title");
+  const dHow = document.getElementById("d-how");
+  const dFiles = document.getElementById("d-files");
+  const dVerify = document.getElementById("d-verify");
+  const dAdr = document.getElementById("d-adr");
+
+  nodes.forEach(btn => {
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", () => {
+      const m = MODULES[btn.dataset.mod];
+      if (!m) return;
+      nodes.forEach(b => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
+      dTitle.textContent = m.title;
+      dHow.textContent = m.how;
+      dFiles.textContent = m.files;
+      dVerify.textContent = m.verify;
+      dAdr.textContent = m.adr;
+    });
+  });
+  // open with the extraction story selected
+  document.querySelector('[data-mod="dlt"]').click();
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", "false"));
+      document.querySelectorAll(".tabpanel").forEach(p => p.classList.remove("active"));
+      tab.setAttribute("aria-selected", "true");
+      document.getElementById(tab.dataset.panel).classList.add("active");
+    });
+  });
+
+  document.querySelectorAll(".copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const prev = btn.textContent;
+        btn.textContent = "copied";
+        setTimeout(() => { btn.textContent = prev; }, 1400);
+      } catch (e) {
+        btn.textContent = "select + copy";
+      }
+    });
+  });
+</script>
