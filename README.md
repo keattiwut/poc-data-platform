@@ -1,5 +1,7 @@
 # poc-data-pipeline — Infra Bootstrap
 
+> **Full operations & maintenance manual:** [docs/OPERATIONS.md](docs/OPERATIONS.md) — network/port map, bring-up & cold-start recovery, secrets, TLS, backup/restore procedures, schedules, alerting, maintenance tasks, and the verification-script index.
+
 Operator notes for bringing up the local self-hosted data pipeline stack (Vault, Postgres, MinIO, Airflow, ClickHouse, Superset, dbt, plus the mock SFTP server and Kafka broker; extraction is dlt running as Airflow tasks).
 
 ## Bring-up order
