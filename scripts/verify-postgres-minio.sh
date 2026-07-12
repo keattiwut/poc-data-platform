@@ -5,7 +5,11 @@ echo "Checking PostgreSQL is reachable..."
 docker compose exec -T postgres pg_isready -U pipeline_admin > /dev/null
 
 echo "Checking MinIO is reachable..."
-curl -sf http://localhost:9000/minio/health/live > /dev/null
+# TLS with CA verification (Issue 09); Schannel shim for Git Bash curls.
+if command curl --version | grep -q Schannel; then
+  curl() { command curl --ssl-no-revoke "$@"; }
+fi
+curl --cacert tls/ca.crt -sf https://localhost:9000/minio/health/live > /dev/null
 
 echo "Checking data-lake bucket exists..."
 # NOTE: the minio image ships its own `mc` binary with a built-in "local" alias
